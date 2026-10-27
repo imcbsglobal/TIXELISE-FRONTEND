@@ -1,0 +1,119 @@
+import { ArrowRight, CalendarDays, DollarSign, Receipt, Ticket, Users, Wallet } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { api } from '@/api'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { StatusBadge } from '@/components/ui/badge'
+import { Alert } from '@/components/ui/alert'
+import { EmptyRow, LoadingRow, PageHead, StatCard } from '@/components/ui/page'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+const STAT_META = [
+  { key: 'tickets_sold_today', label: 'Tickets sold today', icon: Ticket, tone: 'green' },
+  { key: 'gross_sales_today', label: 'Gross sales today', icon: DollarSign, tone: 'green' },
+  { key: 'net_sales_today', label: 'Net sales today', icon: Wallet, tone: 'green' },
+  { key: 'completed_sales_today', label: 'Transactions today', icon: Receipt, tone: 'gray' },
+  { key: 'active_events', label: 'Active events', icon: CalendarDays, tone: 'amber' },
+  { key: 'active_staff', label: 'Active staff', icon: Users, tone: 'gray' },
+]
+
+export default function Dashboard() {
+  const [stats, setStats] = useState(null)
+  const [recentSales, setRecentSales] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    document.title = 'Tixelise | Tenant dashboard'
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      api.get('/admin/dashboard/'),
+      api.get('/admin/sales/?page=1&page_size=5').catch(() => ({ results: [] })),
+    ])
+      .then(([dash, sales]) => {
+        if (cancelled) return
+        setStats(dash)
+        setRecentSales(sales.results || [])
+      })
+      .catch((err) => !cancelled && setError(err.message))
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <>
+      <PageHead
+        eyebrow="TENANT OVERVIEW"
+        title="Welcome back"
+        subtitle={`Today's ticketing activity for your organization${stats ? ` · ${stats.date} (${stats.timezone})` : ''}.`}
+      >
+        <Button asChild>
+          <Link to="/tenant/setup">
+            Setup event <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+      </PageHead>
+
+      {error && <Alert variant="error" className="mb-5">{error}</Alert>}
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {STAT_META.map(({ key, label, icon, tone }) => (
+          <StatCard key={key} label={label} icon={icon} tone={tone} value={loading || !stats ? '—' : stats[key]} />
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle>Recent sales</CardTitle>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/tenant/sales">
+              View all <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Reference</TableHead>
+                <TableHead>Event</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <LoadingRow colSpan={6} />
+              ) : recentSales.length === 0 ? (
+                <EmptyRow colSpan={6} icon={Ticket} message="No sales recorded yet — they appear here once POS staff start selling." />
+              ) : (
+                recentSales.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-mono text-[13.5px]">{s.sale_reference}</TableCell>
+                    <TableCell>{s.event_name}</TableCell>
+                    <TableCell className="font-mono text-[13.5px]">{s.staff_code}</TableCell>
+                    <TableCell>
+                      {s.currency} {s.gross_total}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={s.status} />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{new Date(s.created_at).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </>
+  )
+}

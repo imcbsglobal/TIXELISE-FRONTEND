@@ -1,0 +1,282 @@
+import React, { useState } from 'react'
+import { CalendarClock, Info, Pencil } from 'lucide-react'
+import { api } from '@/api'
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { FieldError } from '@/components/setup/FieldError'
+import { StepShell } from '@/components/setup/StepShell'
+import { friendlyError, isDuplicateMessage, localTimeZone, toUtcIso } from '@/lib/setup'
+
+function validate(form) {
+  const problems = {}
+  const code = form.code.trim()
+  if (!code) problems.code = 'Give the event a short code, for example EV001.'
+  else if (!/^[A-Za-z0-9]+$/.test(code)) problems.code = 'Use only letters and numbers.'
+  if (!form.name.trim()) problems.name = 'Give the event a name people will recognise.'
+  if (!form.start_at) problems.start_at = 'When does the event start?'
+  if (!form.end_at) problems.end_at = 'When does the event end?'
+  if (form.start_at && form.end_at && new Date(form.end_at) <= new Date(form.start_at)) {
+    problems.end_at = 'The end time must be later than the start time.'
+  }
+  if (form.sales_start_at && form.sales_end_at && new Date(form.sales_end_at) <= new Date(form.sales_start_at)) {
+    problems.sales_end_at = 'Sales close must be later than sales open.'
+  }
+  return problems
+}
+
+function formatWhen(value) {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '—'
+  return parsed.toLocaleString()
+}
+
+export default function EventStep({
+  form,
+  setForm,
+  event,
+  events,
+  onCreated,
+  onUseEvent,
+  onNext,
+  onReplace,
+  onBack,
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [reuse, setReuse] = useState(null)
+
+  function update(patch) {
+    setForm((current) => ({ ...current, ...patch }))
+    setFieldErrors((current) => {
+      const next = { ...current }
+      Object.keys(patch).forEach((key) => delete next[key])
+      return next
+    })
+  }
+
+  async function handleSubmit(submitEvent) {
+    submitEvent.preventDefault()
+    const problems = validate(form)
+    if (Object.keys(problems).length) {
+      setFieldErrors(problems)
+      setError(null)
+      return
+    }
+
+    setBusy(true)
+    setError(null)
+    setReuse(null)
+    setFieldErrors({})
+
+    try {
+      const created = await api.post('/admin/events/', {
+        code: form.code.trim().toUpperCase(),
+        name: form.name.trim(),
+        description: form.description.trim(),
+        venue: form.venue.trim(),
+        address: form.address.trim(),
+        start_at: toUtcIso(form.start_at),
+        end_at: toUtcIso(form.end_at),
+        ...(form.sales_start_at ? { sales_start_at: toUtcIso(form.sales_start_at) } : {}),
+        ...(form.sales_end_at ? { sales_end_at: toUtcIso(form.sales_end_at) } : {}),
+      })
+      onCreated(created)
+    } catch (err) {
+      const friendly = friendlyError(err)
+      setError(friendly)
+      setFieldErrors(friendly.fieldErrors)
+      if (isDuplicateMessage(err.message)) {
+        const match = events.find((ev) => ev.code === form.code.trim().toUpperCase())
+        if (match) setReuse(match)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (event) {
+    return (
+      <StepShell
+        step={1}
+        title="Your event is ready"
+        hint="This is the event you are setting up. Everything in the next steps belongs to it."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={onBack}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={onNext}>
+              Continue
+            </Button>
+          </>
+        }
+      >
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[14px] font-bold">{event.code}</span>
+            <span className="text-[15px] font-semibold">{event.name}</span>
+          </div>
+          <dl className="mt-3 space-y-1.5 text-[13.5px]">
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Starts</dt>
+              <dd className="font-medium">{formatWhen(event.start_at)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Ends</dt>
+              <dd className="font-medium">{formatWhen(event.end_at)}</dd>
+            </div>
+            {event.venue ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Venue</dt>
+                <dd className="font-medium">{event.venue}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </div>
+
+        <Button type="button" variant="outline" onClick={onReplace}>
+          <Pencil className="h-4 w-4" /> Use a different event
+        </Button>
+      </StepShell>
+    )
+  }
+
+  return (
+    <StepShell
+      step={1}
+      title="Create your event"
+      hint="An event is the show itself — for example “Music Fest 2026”. We start it as a draft so nothing goes live until you are ready."
+      footer={
+        <>
+          <Button type="button" variant="ghost" onClick={onBack}>
+            Cancel
+          </Button>
+          <Button type="submit" form="setup-event-form" disabled={busy}>
+            {busy ? 'Creating…' : 'Create event and continue'}
+          </Button>
+        </>
+      }
+    >
+      {error ? (
+        <Alert variant="error">
+          <p className="font-bold">{error.title}</p>
+          <p className="mt-1">{error.message}</p>
+          {reuse ? (
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => onUseEvent(reuse)}>
+              Use existing event {reuse.code}
+            </Button>
+          ) : null}
+        </Alert>
+      ) : null}
+
+      <form id="setup-event-form" onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field label="Event code" hint="A short unique code for this event — e.g. EV001. Letters and numbers only.">
+            <Input
+              value={form.code}
+              onChange={(e) => update({ code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
+              placeholder="EV001"
+              className={fieldErrors.code ? 'border-destructive/40' : undefined}
+            />
+            <FieldError>{fieldErrors.code}</FieldError>
+          </Field>
+
+          <Field label="Event name" hint="The name your staff will see on the POS screen.">
+            <Input
+              value={form.name}
+              onChange={(e) => update({ name: e.target.value })}
+              placeholder="Music Fest 2026"
+              className={fieldErrors.name ? 'border-destructive/40' : undefined}
+            />
+            <FieldError>{fieldErrors.name}</FieldError>
+          </Field>
+        </div>
+
+        <Field label="Description" hint="Optional — a short note about the event.">
+          <Textarea
+            rows="2"
+            value={form.description}
+            onChange={(e) => update({ description: e.target.value })}
+            placeholder="Annual music festival"
+          />
+          <FieldError>{fieldErrors.description}</FieldError>
+        </Field>
+
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field label="Venue" hint="Optional — where the event happens.">
+            <Input
+              value={form.venue}
+              onChange={(e) => update({ venue: e.target.value })}
+              placeholder="Central Auditorium"
+            />
+          </Field>
+          <Field label="Address" hint="Optional.">
+            <Input
+              value={form.address}
+              onChange={(e) => update({ address: e.target.value })}
+              placeholder="Kochi, Kerala"
+            />
+          </Field>
+        </div>
+
+        <div className="border-t border-border pt-5">
+          <p className="mb-4 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
+            <CalendarClock className="h-3.5 w-3.5" />
+            Schedule
+          </p>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Field label="Starts at">
+              <Input
+                type="datetime-local"
+                value={form.start_at}
+                onChange={(e) => update({ start_at: e.target.value })}
+                className={fieldErrors.start_at ? 'border-destructive/40' : undefined}
+              />
+              <FieldError>{fieldErrors.start_at}</FieldError>
+            </Field>
+            <Field label="Ends at">
+              <Input
+                type="datetime-local"
+                value={form.end_at}
+                onChange={(e) => update({ end_at: e.target.value })}
+                className={fieldErrors.end_at ? 'border-destructive/40' : undefined}
+              />
+              <FieldError>{fieldErrors.end_at}</FieldError>
+            </Field>
+            <Field label="Sales open" hint="Optional — when the POS may start selling.">
+              <Input
+                type="datetime-local"
+                value={form.sales_start_at}
+                onChange={(e) => update({ sales_start_at: e.target.value })}
+                className={fieldErrors.sales_start_at ? 'border-destructive/40' : undefined}
+              />
+              <FieldError>{fieldErrors.sales_start_at}</FieldError>
+            </Field>
+            <Field label="Sales close" hint="Optional — when selling stops.">
+              <Input
+                type="datetime-local"
+                value={form.sales_end_at}
+                onChange={(e) => update({ sales_end_at: e.target.value })}
+                className={fieldErrors.sales_end_at ? 'border-destructive/40' : undefined}
+              />
+              <FieldError>{fieldErrors.sales_end_at}</FieldError>
+            </Field>
+          </div>
+
+          <p className="mt-4 flex items-start gap-2 rounded-lg bg-muted px-3.5 py-2.5 text-xs text-muted-foreground">
+            <Info className="mt-[2px] h-3.5 w-3.5 shrink-0" />
+            <span>
+              Times are entered in your device time zone ({localTimeZone()}) and stored safely in UTC.
+            </span>
+          </p>
+        </div>
+      </form>
+    </StepShell>
+  )
+}
