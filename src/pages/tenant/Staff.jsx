@@ -96,7 +96,11 @@ export default function Staff() {
         phone: form.phone.trim(),
         password: form.password,
       })
-      setCreated({ staff_code: res.staff_code, username: form.username.trim() })
+      setCreated({
+        staff_code: res.staff_code,
+        username: form.username.trim(),
+        registration: res.central_user_registration || null,
+      })
       setForm(EMPTY_FORM)
       setPage(1)
       reload()
@@ -243,6 +247,9 @@ export default function Staff() {
                 Staff member <strong className="font-mono">{created.staff_code}</strong> can now log in to the POS with
                 username <strong>{created.username}</strong> and the password you set.
               </Alert>
+              {created.registration && created.registration.status !== 'registered' && (
+                <Alert variant="warning">{created.registration.detail}</Alert>
+              )}
               <p className="text-xs text-muted-foreground">The password is never shown again — share it securely.</p>
               <DialogFooter>
                 <Button onClick={closeCreate}>Done</Button>
@@ -296,17 +303,19 @@ export default function Staff() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Email" hint="Optional">
+                <Field label="Email" hint="Required">
                   <Input
                     type="email"
+                    required
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                     placeholder="ravi@dreams.example"
                     autoComplete="off"
                   />
                 </Field>
-                <Field label="Phone" hint="Optional">
+                <Field label="Phone" hint="Required, unique per tenant">
                   <Input
+                    required
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     placeholder="+91 98765 43210"

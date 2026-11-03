@@ -38,7 +38,7 @@ export default function Users() {
       <PageHead
         eyebrow="TENANT"
         title="Users"
-        subtitle="All users linked to this tenant via memberships (from accounts_user and tenancy_tenantmembership_tixelise)."
+        subtitle="All users linked to this tenant via memberships (from tixelise_accounts_user and tixelise_tenancy_tenantmembership)."
       >
         <Button variant="outline" asChild>
           <Link to="/tenant">

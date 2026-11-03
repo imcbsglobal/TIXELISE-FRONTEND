@@ -10,9 +10,12 @@ const EMPTY_FORM = {
   name: '',
   timezone: 'Asia/Kolkata',
   currency: 'INR',
+  phone: '',
   admin_username: '',
   admin_password: '',
   admin_email: '',
+  admin_first_name: '',
+  admin_last_name: '',
 }
 
 function Field({ label, hint, children }) {
@@ -44,10 +47,17 @@ export default function Tenants() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupHint, setLookupHint] = useState('')
 
+  const [currencyOptions, setCurrencyOptions] = useState([])
+  const [currencySource, setCurrencySource] = useState('')
+  const [currencyLoading, setCurrencyLoading] = useState(false)
+
   const [detail, setDetail] = useState(null)
-  const [detailForm, setDetailForm] = useState({ name: '', timezone: '', currency: '' })
+  const [detailForm, setDetailForm] = useState({ name: '', timezone: '', currency: '', phone: '' })
   const [detailError, setDetailError] = useState('')
   const [savingDetail, setSavingDetail] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncPassword, setSyncPassword] = useState('')
+  const [syncError, setSyncError] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [deleteCode, setDeleteCode] = useState('')
@@ -79,6 +89,44 @@ export default function Tenants() {
     setReloadToken((token) => token + 1)
   }
 
+  async function loadCurrencyOptions() {
+    if (currencyOptions.length) return
+    setCurrencyLoading(true)
+    try {
+      const res = await api.get('/platform/tenant-currencies/')
+      setCurrencyOptions(res.results || [])
+      setCurrencySource(res.source || '')
+    } catch {
+      setCurrencyOptions([])
+      setCurrencySource('unavailable')
+    } finally {
+      setCurrencyLoading(false)
+    }
+  }
+
+  // Country/currency choices from the central financial-year master. When the
+  // list cannot be loaded the form falls back to a free-text currency input.
+  function currencyChoices(current) {
+    const choices = currencyOptions.map((item) => ({
+      value: item.currency_code,
+      label: `${item.currency_code} — ${item.country_name} (${item.country_code})`,
+    }))
+    const value = (current || '').trim().toUpperCase()
+    if (value && !choices.some((choice) => choice.value === value)) {
+      choices.unshift({ value, label: `${value} (not in central list)` })
+    }
+    return choices
+  }
+
+  function currencyHint() {
+    if (currencyLoading) return 'Loading countries and currencies…'
+    if (currencySource === 'fallback') {
+      return 'Central master unreachable — showing built-in defaults.'
+    }
+    if (currencySource === 'unavailable') return 'Currency list unavailable — enter a code manually.'
+    return 'Country and currency from the central financial-year master.'
+  }
+
   async function doAction(tenant, action) {
     const verb = action === 'activate' ? 'Activate' : action === 'suspend' ? 'Suspend' : 'Deactivate'
     if (!window.confirm(`${verb} tenant ${tenant.code}?`)) return
@@ -98,17 +146,39 @@ export default function Tenants() {
     event.preventDefault()
     setCreateError('')
     setCreating(true)
+    const currency = form.currency.trim().toUpperCase() || 'INR'
+    const country = currencyOptions.find((item) => item.currency_code === currency)
+    const payload = {
+      code: form.code.trim(),
+      name: form.name.trim(),
+      timezone: form.timezone.trim() || 'UTC',
+      currency,
+      phone: form.phone.trim(),
+      admin_username: form.admin_username.trim(),
+      admin_password: form.admin_password,
+      admin_email: form.admin_email.trim(),
+      admin_first_name: form.admin_first_name.trim(),
+      admin_last_name: form.admin_last_name.trim(),
+    }
+    if (country) {
+      payload.settings = {
+        country_code: country.country_code,
+        country_name: country.country_name,
+        fiscal_year: { from: country.fy_from_month, to: country.fy_to_month },
+      }
+    }
     try {
-      const tenant = await api.post('/platform/tenants/', {
-        code: form.code.trim(),
-        name: form.name.trim(),
-        timezone: form.timezone.trim() || 'UTC',
-        currency: form.currency.trim() || 'INR',
-        admin_username: form.admin_username.trim(),
-        admin_password: form.admin_password,
-        admin_email: form.admin_email.trim(),
+      const tenant = await api.post('/platform/tenants/', payload)
+      const registration = tenant.currency_registration || null
+      const centralUser = tenant.central_user_registration || null
+      setCreated({
+        code: tenant.code,
+        admin: form.admin_username.trim(),
+        currencyWarning:
+          registration && registration.status === 'failed' ? registration.detail : '',
+        centralWarning:
+          centralUser && centralUser.status === 'failed' ? centralUser.detail : '',
       })
-      setCreated({ code: tenant.code, admin: form.admin_username.trim() })
       setForm(EMPTY_FORM)
       setPage(1)
       reload()
@@ -161,13 +231,25 @@ export default function Tenants() {
     }
   }, [form.code, createOpen, created])
 
+  useEffect(() => {
+    if (createOpen || detail) loadCurrencyOptions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createOpen, detail])
+
   async function openDetail(tenant) {
     setActionError('')
     setDetailError('')
+    setSyncError('')
+    setSyncPassword('')
     try {
       const full = await api.get(`/platform/tenants/${tenant.id}/`)
       setDetail(full)
-      setDetailForm({ name: full.name, timezone: full.timezone, currency: full.currency })
+      setDetailForm({
+        name: full.name,
+        timezone: full.timezone,
+        currency: full.currency,
+        phone: full.phone || '',
+      })
     } catch (err) {
       setActionError(err.message)
     }
@@ -185,6 +267,28 @@ export default function Tenants() {
       setDetailError(err.message)
     } finally {
       setSavingDetail(false)
+    }
+  }
+
+  // The central registration is best effort, so a failed attempt has to be
+  // retryable: re-submitting the create form would collide on the tenant code.
+  async function handleSyncCentral() {
+    setSyncError('')
+    setSyncing(true)
+    try {
+      const res = await api.post(`/platform/tenants/${detail.id}/sync-central/`, {
+        password: syncPassword,
+      })
+      if ((res.user || {}).status === 'failed') {
+        setSyncError(res.user.detail || 'Central registration failed.')
+        return
+      }
+      setSyncPassword('')
+      await openDetail(detail)
+    } catch (err) {
+      setSyncError(err.message)
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -330,6 +434,19 @@ export default function Tenants() {
                 Tenant <strong className="mono">{created.code}</strong> is live. Its admin can log
                 in now with username <strong>{created.admin}</strong> and the password you set.
               </p>
+              {created.currencyWarning && (
+                <p className="alert alert-warning">
+                  The tenant is active, but its currency could not be registered in the central
+                  currency master ({created.currencyWarning}).
+                </p>
+              )}
+              {created.centralWarning && (
+                <p className="alert alert-warning">
+                  The tenant is active, but its admin account could not be registered in the
+                  central user master ({created.centralWarning}). Open the tenant and use
+                  “Register central account” to retry.
+                </p>
+              )}
               <p className="field-hint">The password is never shown again — share it securely.</p>
               <div className="modal-actions">
                 <button className="btn btn-primary" onClick={closeCreate}>Done</button>
@@ -366,16 +483,57 @@ export default function Tenants() {
                     placeholder="Asia/Kolkata"
                   />
                 </Field>
-                <Field label="Currency">
-                  <input
-                    value={form.currency}
-                    onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
-                    placeholder="INR"
-                  />
+                <Field label="Currency" hint={currencyHint()}>
+                  {currencyOptions.length === 0 ? (
+                    <input
+                      value={form.currency}
+                      onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
+                      placeholder="INR"
+                    />
+                  ) : (
+                    <select
+                      value={form.currency}
+                      onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                    >
+                      {currencyChoices(form.currency).map((choice) => (
+                        <option key={choice.value} value={choice.value}>{choice.label}</option>
+                      ))}
+                    </select>
+                  )}
                 </Field>
               </div>
 
+              <Field label="Phone number">
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="+91 98765 43210"
+                  required
+                />
+              </Field>
+
               <p className="form-section">First tenant admin</p>
+
+              <div className="grid-2">
+                <Field label="First name" hint="Optional">
+                  <input
+                    value={form.admin_first_name}
+                    onChange={(e) => setForm({ ...form, admin_first_name: e.target.value })}
+                    placeholder="John"
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field label="Last name" hint="Optional">
+                  <input
+                    value={form.admin_last_name}
+                    onChange={(e) => setForm({ ...form, admin_last_name: e.target.value })}
+                    placeholder="Doe"
+                    autoComplete="off"
+                  />
+                </Field>
+              </div>
 
               <div className="grid-2">
                 <Field label="Admin username">
@@ -387,13 +545,14 @@ export default function Tenants() {
                     required
                   />
                 </Field>
-                <Field label="Admin email" hint="Optional">
+                <Field label="Admin email">
                   <input
                     type="email"
                     value={form.admin_email}
                     onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
                     placeholder="admin@dreams.example"
                     autoComplete="off"
+                    required
                   />
                 </Field>
               </div>
@@ -447,13 +606,69 @@ export default function Tenants() {
               </Field>
             </div>
 
-            <Field label="Currency">
+            <Field label="Currency" hint={currencyHint()}>
+              {currencyOptions.length === 0 ? (
+                <input
+                  value={detailForm.currency}
+                  onChange={(e) => setDetailForm({ ...detailForm, currency: e.target.value.toUpperCase() })}
+                  required
+                />
+              ) : (
+                <select
+                  value={detailForm.currency}
+                  onChange={(e) => setDetailForm({ ...detailForm, currency: e.target.value })}
+                  required
+                >
+                  {currencyChoices(detailForm.currency).map((choice) => (
+                    <option key={choice.value} value={choice.value}>{choice.label}</option>
+                  ))}
+                </select>
+              )}
+            </Field>
+
+            <Field label="Phone number">
               <input
-                value={detailForm.currency}
-                onChange={(e) => setDetailForm({ ...detailForm, currency: e.target.value.toUpperCase() })}
+                type="tel"
+                inputMode="tel"
+                value={detailForm.phone}
+                onChange={(e) => setDetailForm({ ...detailForm, phone: e.target.value })}
+                placeholder="+91 98765 43210"
                 required
               />
             </Field>
+
+            <div className="detail-meta">
+              <span className="muted">Central account</span>
+              {detail.admin_central_user_id ? (
+                <span className="badge active">linked #{detail.admin_central_user_id}</span>
+              ) : (
+                <span className="badge suspended">not linked</span>
+              )}
+            </div>
+
+            {!detail.admin_central_user_id && (
+              <>
+                {syncError && <p className="alert alert-error">{syncError}</p>}
+                <Field label="Admin password" hint="Required to create the central account.">
+                  <input
+                    type="password"
+                    value={syncPassword}
+                    onChange={(e) => setSyncPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </Field>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={handleSyncCentral}
+                    disabled={syncing}
+                  >
+                    {syncing ? 'Registering…' : 'Register central account'}
+                  </button>
+                </div>
+              </>
+            )}
 
             <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
               <button
@@ -485,8 +700,9 @@ export default function Tenants() {
             </p>
             <p className="muted">
               This action cannot be undone. All tenant-owned data — events, ticket types,
-              prices, staff, assignments, sales and tickets — will be removed. User accounts
-              and audit history are kept.
+              prices, staff, assignments, sales and tickets — will be removed, and the tenant
+              admin's central account is deleted from the user master. User accounts and audit
+              history are kept.
             </p>
             <Field label={`Type "${deleteConfirm.code}" to confirm`}>
               <input
