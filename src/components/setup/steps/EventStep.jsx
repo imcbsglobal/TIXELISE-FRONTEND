@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { FieldError } from '@/components/setup/FieldError'
 import { StepShell } from '@/components/setup/StepShell'
-import { friendlyError, isDuplicateMessage, localTimeZone, toUtcIso } from '@/lib/setup'
+import { friendlyError, isDuplicateMessage, localTimeZone, toUtcIso, uniqueCodeFromName } from '@/lib/setup'
 
 function validate(form) {
   const problems = {}
@@ -50,6 +50,8 @@ export default function EventStep({
   const [fieldErrors, setFieldErrors] = useState({})
   const [reuse, setReuse] = useState(null)
 
+  const existingCodes = events.map((item) => item.code)
+
   function update(patch) {
     setForm((current) => ({ ...current, ...patch }))
     setFieldErrors((current) => {
@@ -59,9 +61,29 @@ export default function EventStep({
     })
   }
 
+  // The code follows the name until the user edits it themselves. A code that is
+  // already taken gets a number appended, so the suggestion is always free.
+  function updateName(name) {
+    const derived = uniqueCodeFromName(name, existingCodes)
+    update({ name, ...(form.codeTouched || !derived ? {} : { code: derived }) })
+  }
+
+  function updateCode(value) {
+    setReuse(null)
+    update({ code: value.toUpperCase().replace(/[^A-Z0-9]/g, ''), codeTouched: true })
+  }
+
   async function handleSubmit(submitEvent) {
     submitEvent.preventDefault()
     const problems = validate(form)
+    const typedCode = form.code.trim().toUpperCase()
+    const clash = events.find((item) => String(item.code).toUpperCase() === typedCode)
+    if (clash) {
+      problems.code = `${clash.code} is already used by “${clash.name}”. Pick a different code, or set up that event instead.`
+      setReuse(clash)
+    } else {
+      setReuse(null)
+    }
     if (Object.keys(problems).length) {
       setFieldErrors(problems)
       setError(null)
@@ -174,26 +196,38 @@ export default function EventStep({
         </Alert>
       ) : null}
 
+      {reuse && !error ? (
+        <Alert>
+          <p className="font-bold">{reuse.code} is already taken</p>
+          <p className="mt-1">
+            “{reuse.name}” already uses that code. Pick a different code above, or continue with the event that exists.
+          </p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => onUseEvent(reuse)}>
+            Use existing event {reuse.code}
+          </Button>
+        </Alert>
+      ) : null}
+
       <form id="setup-event-form" onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field label="Event code" hint="A short unique code for this event — e.g. EV001. Letters and numbers only.">
-            <Input
-              value={form.code}
-              onChange={(e) => update({ code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
-              placeholder="EV001"
-              className={fieldErrors.code ? 'border-destructive/40' : undefined}
-            />
-            <FieldError>{fieldErrors.code}</FieldError>
-          </Field>
-
           <Field label="Event name" hint="The name your staff will see on the POS screen.">
             <Input
               value={form.name}
-              onChange={(e) => update({ name: e.target.value })}
+              onChange={(e) => updateName(e.target.value)}
               placeholder="Music Fest 2026"
               className={fieldErrors.name ? 'border-destructive/40' : undefined}
             />
             <FieldError>{fieldErrors.name}</FieldError>
+          </Field>
+
+          <Field label="Event code" hint="Filled in from the name — edit it if you prefer something else.">
+            <Input
+              value={form.code}
+              onChange={(e) => updateCode(e.target.value)}
+              placeholder="MUSICFEST2026"
+              className={fieldErrors.code ? 'border-destructive/40' : undefined}
+            />
+            <FieldError>{fieldErrors.code}</FieldError>
           </Field>
         </div>
 

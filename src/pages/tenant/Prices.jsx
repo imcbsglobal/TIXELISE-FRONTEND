@@ -10,6 +10,7 @@ import { Field } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
+import { BubblePattern } from '@/components/ui/bubble-pattern'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const PAGE_SIZE = 20
@@ -43,6 +44,7 @@ export default function Prices() {
   const [error, setError] = useState('')
   const [eventsError, setEventsError] = useState('')
   const [search, setSearch] = useState('')
+  const [eventSearch, setEventSearch] = useState('')
   const [selectedEvent, setSelectedEvent] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
 
@@ -113,6 +115,9 @@ export default function Prices() {
   const categoryById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories])
 
   const totalPages = Math.max(1, Math.ceil(data.count / PAGE_SIZE))
+  const visibleEvents = events.filter((event) =>
+    `${event.code} ${event.name} ${event.venue || ''}`.toLowerCase().includes(eventSearch.trim().toLowerCase()),
+  )
   const rows = data.results.filter((p) => {
     const ev = eventById[p.event]
     const cat = categoryById[p.category]
@@ -152,6 +157,7 @@ export default function Prices() {
   function selectEvent(eventId) {
     setSelectedEvent(String(eventId))
     setSearch('')
+    setEventSearch('')
     setPage(1)
   }
 
@@ -211,7 +217,12 @@ export default function Prices() {
 
       {!selectedEvent ? (
         <section aria-label="Available events">
-          <h2 className="mb-4 font-display text-lg font-extrabold">Select an event to view its prices</h2>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <h2 className="font-display text-lg font-extrabold">Select an event to view its prices</h2>
+            {events.length > 0 ? (
+              <SearchInput value={eventSearch} onChange={setEventSearch} placeholder="Search events…" />
+            ) : null}
+          </div>
           {eventsLoading ? (
             <Card>
               <CardContent className="p-6 text-sm text-muted-foreground">Loading events…</CardContent>
@@ -220,32 +231,39 @@ export default function Prices() {
             <Card>
               <CardContent className="p-6 text-sm text-muted-foreground">No events available.</CardContent>
             </Card>
+          ) : visibleEvents.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-sm text-muted-foreground">No events match “{eventSearch}”.</CardContent>
+            </Card>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {events.map((event) => (
+            <div className="grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {visibleEvents.map((event) => (
                 <button
                   key={event.id}
                   type="button"
                   onClick={() => selectEvent(event.id)}
-                  className="rounded-lg border border-border bg-card p-5 text-left shadow-sm transition-colors hover:border-primary hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card p-5 text-left shadow-sm transition-colors hover:border-primary hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <div className="mb-3 flex items-start justify-between gap-3">
+                  <BubblePattern />
+                  <div className="relative z-10 mb-3 flex items-start justify-between gap-3">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eaf3ee] text-primary">
                       <CalendarDays className="h-5 w-5" />
                     </span>
                     <StatusBadge status={event.status} />
                   </div>
-                  <p className="font-mono text-xs text-muted-foreground">{event.code}</p>
-                  <h3 className="mt-1 font-display text-base font-extrabold">{event.name}</h3>
-                  {event.venue && (
-                    <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 shrink-0" />
-                      {event.venue}
-                    </p>
-                  )}
-                  {event.start_at && (
-                    <p className="mt-1 text-sm text-muted-foreground">{new Date(event.start_at).toLocaleString()}</p>
-                  )}
+                  <p className="relative z-10 font-mono text-xs text-muted-foreground">{event.code}</p>
+                  <h3 className="relative z-10 mt-1 line-clamp-2 font-display text-base font-extrabold">{event.name}</h3>
+                  <div className="relative z-10 mt-auto pt-2">
+                    {event.venue ? (
+                      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4 shrink-0" />
+                        <span className="line-clamp-1">{event.venue}</span>
+                      </p>
+                    ) : null}
+                    {event.start_at ? (
+                      <p className="mt-1 text-sm text-muted-foreground">{new Date(event.start_at).toLocaleString()}</p>
+                    ) : null}
+                  </div>
                 </button>
               ))}
             </div>

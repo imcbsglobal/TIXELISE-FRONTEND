@@ -41,11 +41,16 @@ export default function Tenants() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
   const [created, setCreated] = useState(null)
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupHint, setLookupHint] = useState('')
 
   const [detail, setDetail] = useState(null)
   const [detailForm, setDetailForm] = useState({ name: '', timezone: '', currency: '' })
   const [detailError, setDetailError] = useState('')
   const [savingDetail, setSavingDetail] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [deleteCode, setDeleteCode] = useState('')
 
   useEffect(() => {
     document.title = 'Tixelise | Tenants'
@@ -118,7 +123,43 @@ export default function Tenants() {
     setCreateOpen(false)
     setCreated(null)
     setCreateError('')
+    setLookupHint('')
+    setLookupLoading(false)
   }
+
+  useEffect(() => {
+    const code = form.code.trim().toUpperCase()
+    if (!createOpen || created || code.length < 3) {
+      setLookupHint('')
+      setLookupLoading(false)
+      return
+    }
+    let cancelled = false
+    setLookupLoading(true)
+    setLookupHint('')
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(`/platform/tenants/lookup/?code=${encodeURIComponent(code)}`)
+        if (cancelled) return
+        if (res.found && res.name) {
+          setForm((prev) => (prev.name ? prev : { ...prev, name: res.name }))
+          setLookupHint(`Auto-filled from license: ${res.name}`)
+        } else if (res.reason === 'inactive') {
+          setLookupHint('License found but not active')
+        } else {
+          setLookupHint('')
+        }
+      } catch (err) {
+        if (!cancelled) setLookupHint('')
+      } finally {
+        if (!cancelled) setLookupLoading(false)
+      }
+    }, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [form.code, createOpen, created])
 
   async function openDetail(tenant) {
     setActionError('')
@@ -147,19 +188,46 @@ export default function Tenants() {
     }
   }
 
+  function openDeleteConfirm() {
+    if (!detail) return
+    setDetailError('')
+    setDeleteCode('')
+    setDeleteConfirm({ id: detail.id, code: detail.code, name: detail.name })
+  }
+
+  function closeDeleteConfirm() {
+    setDeleteConfirm(null)
+    setDeleteCode('')
+  }
+
+  async function handleDeleteTenant() {
+    if (!deleteConfirm) return
+    if (deleteCode.trim().toUpperCase() !== deleteConfirm.code) {
+      setDetailError('Tenant code did not match. Deletion cancelled.')
+      return
+    }
+    setDetailError('')
+    setDeleting(true)
+    try {
+      await api.delete(`/platform/tenants/${deleteConfirm.id}/`)
+      reload()
+      setDetail(null)
+      closeDeleteConfirm()
+    } catch (err) {
+      setDetailError(err.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   function actionButtons(tenant) {
     const busy = busyId === tenant.id
     return (
       <div className="row-actions">
         {tenant.status === 'active' && (
-          <>
-            <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => doAction(tenant, 'suspend')}>
-              Suspend
-            </button>
-            <button className="btn btn-outline btn-sm danger" disabled={busy} onClick={() => doAction(tenant, 'deactivate')}>
-              Deactivate
-            </button>
-          </>
+          <button className="btn btn-outline btn-sm danger" disabled={busy} onClick={() => doAction(tenant, 'deactivate')}>
+            Deactivate
+          </button>
         )}
         {tenant.status !== 'active' && (
           <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => doAction(tenant, 'activate')}>
@@ -279,6 +347,9 @@ export default function Tenants() {
                     placeholder="DREAMS001"
                     required
                   />
+                  {(lookupLoading || lookupHint) && (
+                    <p className="field-hint">{lookupLoading ? 'Looking up license…' : lookupHint}</p>
+                  )}
                 </Field>
                 <Field label="Organization name">
                   <input
@@ -351,7 +422,7 @@ export default function Tenants() {
       {detail && (
         <Modal title={`Tenant ${detail.code}`} onClose={() => setDetail(null)}>
           <form onSubmit={handleSaveDetail} className="modal-body">
-            {detailError && <p className="alert alert-error">{detailError}</p>}
+            {detailError && !deleteConfirm && <p className="alert alert-error">{detailError}</p>}
 
             <div className="detail-meta">
               <span className={`badge ${detail.status}`}>{detail.status}</span>
@@ -384,13 +455,61 @@ export default function Tenants() {
               />
             </Field>
 
-            <div className="modal-actions">
-              <button type="button" className="btn btn-outline" onClick={() => setDetail(null)}>Close</button>
-              <button type="submit" className="btn btn-primary" disabled={savingDetail}>
-                {savingDetail ? 'Saving…' : 'Save changes'}
+            <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                className="btn btn-outline danger"
+                disabled={savingDetail || deleting}
+                onClick={openDeleteConfirm}
+              >
+                Delete permanently
               </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="button" className="btn btn-outline" onClick={() => setDetail(null)}>Close</button>
+                <button type="submit" className="btn btn-primary" disabled={savingDetail || deleting}>
+                  {savingDetail ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {deleteConfirm && (
+        <Modal title="Confirm permanent deletion" onClose={closeDeleteConfirm}>
+          <div className="modal-body">
+            {detailError && <p className="alert alert-error">{detailError}</p>}
+            <p className="alert alert-error">
+              <strong>Warning:</strong> This will permanently delete tenant{' '}
+              <strong className="mono">{deleteConfirm.code}</strong> ({deleteConfirm.name}).
+            </p>
+            <p className="muted">
+              This action cannot be undone. All tenant-owned data — events, ticket types,
+              prices, staff, assignments, sales and tickets — will be removed. User accounts
+              and audit history are kept.
+            </p>
+            <Field label={`Type "${deleteConfirm.code}" to confirm`}>
+              <input
+                value={deleteCode}
+                onChange={(e) => setDeleteCode(e.target.value.toUpperCase())}
+                placeholder={deleteConfirm.code}
+                autoFocus
+              />
+            </Field>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-outline" onClick={closeDeleteConfirm} disabled={deleting}>
+                Cancel
+              </button>
+              <button
+                type="button"
+ className="btn btn-danger"
+                disabled={deleting || deleteCode.trim().toUpperCase() !== deleteConfirm.code}
+                onClick={handleDeleteTenant}
+              >
+                {deleting ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </>

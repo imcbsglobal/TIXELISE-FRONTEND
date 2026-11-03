@@ -16,6 +16,7 @@ import Assignments from './pages/tenant/Assignments'
 import Sales from './pages/tenant/Sales'
 import Tickets from './pages/tenant/Tickets'
 import Reports from './pages/tenant/Reports'
+import StaffReport from './pages/tenant/StaffReport'
 import Audit from './pages/tenant/Audit'
 import Setup from './pages/tenant/Setup'
 
@@ -79,6 +80,7 @@ export default function App() {
       <Route path="/tenant/sales" element={<TenantPage><Sales /></TenantPage>} />
       <Route path="/tenant/tickets" element={<TenantPage><Tickets /></TenantPage>} />
       <Route path="/tenant/reports" element={<TenantPage><Reports /></TenantPage>} />
+      <Route path="/tenant/reports/staff" element={<TenantPage><StaffReport /></TenantPage>} />
       <Route path="/tenant/audit" element={<TenantPage><Audit /></TenantPage>} />
 
       <Route

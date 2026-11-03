@@ -57,6 +57,7 @@ const NAVS = {
         children: [
           { to: '/tenant/sales', label: 'Sales', icon: Receipt },
           { to: '/tenant/reports', label: 'Reports', icon: BarChart3 },
+          { to: '/tenant/reports/staff', label: 'Staff report', icon: UserCheck },
           { to: '/tenant/tickets', label: 'Tickets', icon: Ticket },
           { to: '/tenant/audit', label: 'Audit log', icon: ClipboardList },
         ],
@@ -78,6 +79,7 @@ const TITLES = {
   '/tenant/sales': 'Sales',
   '/tenant/tickets': 'Tickets',
   '/tenant/reports': 'Reports',
+  '/tenant/reports/staff': 'Staff report',
   '/tenant/audit': 'Audit log',
 }
 
@@ -95,6 +97,8 @@ export default function AppShell({ children }) {
   }
 
   const initial = (session?.username || '?').charAt(0).toUpperCase()
+  // The soft green wash is a dashboard-only treatment; every other page sits on the plain canvas.
+  const isDashboard = pathname === '/tenant' || pathname === '/platform'
 
   return (
     <div className="dashboard-density grid min-h-screen grid-cols-1 md:grid-cols-[256px_1fr]">
@@ -114,6 +118,10 @@ export default function AppShell({ children }) {
           {nav.items.map((item) => {
             if (item.children) {
               const childActive = item.children.some((child) => pathname.startsWith(child.to))
+              // Nested routes (e.g. /reports/staff) must not also light up their parent.
+              const activeChild = item.children
+                .filter((child) => pathname === child.to || pathname.startsWith(`${child.to}/`))
+                .sort((a, b) => b.to.length - a.to.length)[0]
               const open = openGroups[item.id] ?? childActive
               return (
                 <div key={item.id || item.to} className="flex flex-col">
@@ -136,7 +144,7 @@ export default function AppShell({ children }) {
                   {open ? (
                     <div className="flex flex-col gap-0.5 md:ml-[21px] md:mt-1 md:border-l md:border-border md:pl-3.5">
                       {item.children.map((child) => {
-                        const active = pathname.startsWith(child.to)
+                        const active = activeChild?.to === child.to
                         return (
                           <a
                             key={child.to}
@@ -204,7 +212,12 @@ export default function AppShell({ children }) {
         </div>
       </aside>
 
-      <div className="dashboard-main flex min-h-screen min-w-0 flex-col bg-gradient-to-b from-[#e3f1e7] via-[#f0f7f2] to-white">
+      <div
+        className={cn(
+          'dashboard-main flex min-h-screen min-w-0 flex-col bg-background',
+          isDashboard && 'bg-gradient-to-b from-[#e3f1e7] via-[#f0f7f2] to-white',
+        )}
+      >
         <div className="flex-1 p-5 md:p-8">{children}</div>
       </div>
     </div>

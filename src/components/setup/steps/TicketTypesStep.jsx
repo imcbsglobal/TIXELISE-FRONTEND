@@ -7,8 +7,10 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { FieldError } from '@/components/setup/FieldError'
 import { RowStatus } from '@/components/setup/RowStatus'
+import { BubblePattern } from '@/components/ui/bubble-pattern'
 import { StepShell } from '@/components/setup/StepShell'
 import { codeFromName, friendlyError, isDuplicateMessage, uid } from '@/lib/setup'
+import { cn } from '@/lib/utils'
 
 const PRESETS = [
   { name: 'Adult', price: '499.00' },
@@ -310,7 +312,7 @@ export default function TicketTypesStep({ event, rows, setRows, categories, onCa
           </Button>
         </div>
         {activeCategories.length ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {activeCategories.map((category) => {
               const selected = selectedCategoryIds.has(category.id)
               return (
@@ -320,13 +322,14 @@ export default function TicketTypesStep({ event, rows, setRows, categories, onCa
                   variant="outline"
                   disabled={busy || selected}
                   onClick={() => addExistingCategory(category)}
-                  className="h-auto min-h-[76px] justify-between gap-4 whitespace-normal rounded-xl bg-card px-4 py-3 text-left hover:bg-accent/40"
+                  className="relative h-full min-h-[76px] justify-between gap-4 overflow-hidden whitespace-normal rounded-xl bg-card px-4 py-3 text-left hover:bg-accent/40"
                 >
-                  <span className="flex min-w-0 flex-col items-start gap-1">
+                  <BubblePattern />
+                  <span className="relative z-10 flex min-w-0 flex-col items-start gap-1">
                     <span className="font-display text-base font-bold text-foreground">{category.name}</span>
                     <span className="font-mono text-xs text-muted-foreground">{category.code}</span>
                   </span>
-                  <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
+                  <span className="relative z-10 flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
                     {selected ? 'Added' : <><Plus className="h-4 w-4" /> Add</>}
                   </span>
                 </Button>
@@ -396,7 +399,7 @@ export default function TicketTypesStep({ event, rows, setRows, categories, onCa
                     onChange={(e) => updateField(row.uid, 'price', e.target.value)}
                     placeholder="499.00"
                     disabled={busy}
-                    className={fieldErrors[`${row.uid}.price`] ? 'border-destructive/40' : undefined}
+                    className={cn('no-spinner', fieldErrors[`${row.uid}.price`] ? 'border-destructive/40' : undefined)}
                   />
                   <FieldError>{fieldErrors[`${row.uid}.price`]}</FieldError>
                 </Field>

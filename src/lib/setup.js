@@ -3,7 +3,7 @@ import { api } from '@/api'
 export const SETUP_STEPS = [
   { id: 1, key: 'event', title: 'Event', blurb: 'Name your event and set the schedule' },
   { id: 2, key: 'ticketTypes', title: 'Ticket types', blurb: 'Create the kinds of tickets you sell' },
-  { id: 3, key: 'staff', title: 'Staff', blurb: 'Add the people who will sell tickets' },
+  { id: 3, key: 'staff', title: 'Staff', blurb: 'Pick the existing staff who will sell tickets' },
   { id: 4, key: 'assign', title: 'Assign', blurb: 'Let staff sell for this event' },
   { id: 5, key: 'activate', title: 'Make live', blurb: 'Review everything and open for sales' },
 ]
@@ -90,11 +90,25 @@ export function nextCode(prefix, existing, width = 3) {
   return `${prefix}${String(highest + 1).padStart(width, '0')}`
 }
 
-export function codeFromName(name) {
+export function codeFromName(name, max = 12) {
   return String(name || '')
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
-    .slice(0, 12)
+    .slice(0, max)
+}
+
+/** Code derived from a name, suffixed with a number when that code is already taken. */
+export function uniqueCodeFromName(name, existing, max = 16) {
+  const base = codeFromName(name, max)
+  if (!base) return ''
+  const taken = new Set((existing || []).filter(Boolean).map((value) => String(value).toUpperCase()))
+  if (!taken.has(base)) return base
+  const stem = base.slice(0, Math.max(1, max - 2))
+  for (let suffix = 2; suffix <= 99; suffix += 1) {
+    const candidate = `${stem}${suffix}`
+    if (!taken.has(candidate)) return candidate
+  }
+  return base
 }
 
 export function usernameFromName(name) {

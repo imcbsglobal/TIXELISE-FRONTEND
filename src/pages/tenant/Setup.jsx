@@ -15,6 +15,7 @@ import { SETUP_STEPS, clearDraft, fetchAll, loadDraft, nextCode, saveDraft, uid 
 
 const EMPTY_EVENT = {
   code: '',
+  codeTouched: false,
   name: '',
   description: '',
   venue: '',
@@ -91,7 +92,8 @@ export default function Setup() {
         if (draft.event) setEvent(draft.event)
         if (draft.eventForm) setEventForm({ ...EMPTY_EVENT, ...draft.eventForm })
         if (Array.isArray(draft.ticketTypes)) setTicketRows(draft.ticketTypes)
-        if (Array.isArray(draft.staff)) setStaffRows(draft.staff)
+        // Only keep picked staff rows — older drafts could hold typed-in accounts.
+        if (Array.isArray(draft.staff)) setStaffRows(draft.staff.filter((row) => row.staffId))
         if (Array.isArray(draft.assign)) setAssignRows(draft.assign)
         if (draft.step) setStep(draft.step)
         if (draft.activated) setActivated(true)
@@ -106,7 +108,7 @@ export default function Setup() {
     }
   }, [loadRefs, tenantCode])
 
-  // Draft persistence — passwords are stripped before anything is written to the browser.
+  // Draft persistence — the wizard survives a page reload.
   useEffect(() => {
     if (loading) return
     saveDraft(tenantCode, {
@@ -114,7 +116,7 @@ export default function Setup() {
       event,
       eventForm,
       ticketTypes: ticketRows,
-      staff: staffRows.map((row) => ({ ...row, password: '' })),
+      staff: staffRows,
       assign: assignRows,
       activated,
     })
@@ -177,17 +179,9 @@ export default function Setup() {
     setEventForm((current) => ({
       ...current,
       code: nextCode('EV', refs.events.map((item) => item.code)),
+      codeTouched: false,
     }))
     setStep(1)
-  }
-
-  function handleStaffCreated(created) {
-    setRefs((current) => ({
-      ...current,
-      staff: current.staff.some((member) => member.id === created.id)
-        ? current.staff.map((member) => (member.id === created.id ? { ...member, ...created } : member))
-        : [...current.staff, { ...created, status: 'active' }],
-    }))
   }
 
   function handleCategoryCreated(category) {
@@ -224,7 +218,7 @@ export default function Setup() {
       <PageHead
         eyebrow="SETUP"
         title="Set up your first event"
-        subtitle="Five short steps: create the event, add ticket types and prices, add staff, let them sell, then go live."
+        subtitle="Five short steps: create the event, add ticket types and prices, pick staff, let them sell, then go live."
       >
         <Button variant="outline" onClick={startOver}>
           <RotateCcw className="h-4 w-4" /> Start over
@@ -276,7 +270,6 @@ export default function Setup() {
           rows={staffRows}
           setRows={setStaffRows}
           staff={refs.staff}
-          onStaffCreated={handleStaffCreated}
           onNext={goToAssign}
           onBack={() => setStep(2)}
         />
