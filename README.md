@@ -28,26 +28,28 @@ To run the backend and prepare demo accounts, follow the instructions in
 
 ## API configuration
 
-The production build talks to the API on its own origin
-(`https://tixelise.trelliscoerp.com/api/v1`, set in `.env.production` as
-the relative path `/api/v1`).
-
-Development falls back to:
+Every build and the dev server talk to the deployed API:
 
 ```text
-http://127.0.0.1:8000/api/v1
+https://tixelise.trelliscoerp.com/api/v1
 ```
 
-To point a build at a different backend, set `VITE_API_URL` in `.env`
-(development) or `.env.production` (build), or export it before `npm run build`:
+That address is the fallback in `src/api.js` and is also set explicitly in
+`.env.production` (builds) and `.env.development` (dev server, gitignored).
+
+To run against a backend on this machine, put this in `.env.development`:
 
 ```dotenv
-VITE_API_URL=https://tixelise.trelliscoerp.com/api/v1
+VITE_API_URL=http://127.0.0.1:8000/api/v1
 ```
 
-`VITE_API_URL` should include the API prefix, such as `/api/v1`. Vite exposes
-variables prefixed with `VITE_` to browser code, so do not put secrets in this
-file.
+or export it before `npm run build`. `VITE_API_URL` must include the `/api/v1`
+prefix. Vite inlines `VITE_*` values at build time and ships them to the
+browser, so never put secrets here.
+
+Calling the deployed API from `http://localhost:5173` is a cross-origin
+request, so the server's `CORS_ALLOWED_ORIGINS` must list that origin as well as
+`https://tixelise.trelliscoerp.com`.
 
 The API client adds the access token to authenticated requests and attempts to
 refresh an expired access token. Login session data is stored in browser
