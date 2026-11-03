@@ -28,16 +28,21 @@ To run the backend and prepare demo accounts, follow the instructions in
 
 ## API configuration
 
-By default, the frontend sends API requests to:
+The production build talks to the API on its own origin
+(`https://tixelise.trelliscoerp.com/api/v1`, set in `.env.production` as
+the relative path `/api/v1`).
+
+Development falls back to:
 
 ```text
 http://127.0.0.1:8000/api/v1
 ```
 
-To use a different backend, create a local `.env` file in `frontend` and set:
+To point a build at a different backend, set `VITE_API_URL` in `.env`
+(development) or `.env.production` (build), or export it before `npm run build`:
 
 ```dotenv
-VITE_API_URL=http://127.0.0.1:8000/api/v1
+VITE_API_URL=https://tixelise.trelliscoerp.com/api/v1
 ```
 
 `VITE_API_URL` should include the API prefix, such as `/api/v1`. Vite exposes

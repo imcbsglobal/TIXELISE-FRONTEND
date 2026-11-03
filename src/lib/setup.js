@@ -1,4 +1,4 @@
-import { api } from '@/api'
+import { api, API_BASE_URL } from '@/api'
 
 export const SETUP_STEPS = [
   { id: 1, key: 'event', title: 'Event', blurb: 'Name your event and set the schedule' },
@@ -210,8 +210,7 @@ export function parseFieldErrors(message) {
 const CODE_MESSAGES = {
   NETWORK_ERROR: {
     title: 'Cannot reach the server',
-    message:
-      'We could not reach the backend. Make sure it is running (default address is http://127.0.0.1:8000) and try again.',
+    message: `We could not reach the backend at ${API_BASE_URL}. Check that it is running and try again.`,
   },
   SESSION_EXPIRED: {
     title: 'Session expired',
