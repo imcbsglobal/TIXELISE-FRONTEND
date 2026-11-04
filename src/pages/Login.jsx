@@ -55,20 +55,20 @@ export default function Login() {
   return (
     <main className="login-card">
       <section className="art-panel" aria-label="Tixelise event management illustration">
-        <div className="brand"><span className="brand-mark">t</span><span>Tixelise</span></div>
-        <img src="/assets/Login_vector.png" alt="Event attendant holding a ticket scanner" />
+        <div className="brand">
+          <img className="brand-logo" src="/assets/tixelise-logo-green.png" alt="Tixelise" />
+        </div>
+        <img className="art-figure" src="/assets/Login_vector.png" alt="Event attendant holding a ticket scanner" />
       </section>
 
       <section className="form-panel">
+        <div className="brand-mobile">
+          <img src="/assets/tixelise-logo-green.png" alt="Tixelise" />
+        </div>
         <div className="form-wrap">
           <div className="welcome-copy">
             <p className="eyebrow">WELCOME BACK</p>
             <h1>{isPlatformLogin ? 'Platform admin login' : 'Log in'}</h1>
-            <p>
-              {isPlatformLogin
-                ? 'Sign in to manage tenants and platform settings.'
-                : 'Sign in to manage your events, tickets, staff and more with Tixelise.'}
-            </p>
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -106,11 +106,11 @@ export default function Login() {
             {!isPlatformLogin && (
               <div className="tenant-field">
                 <label className="input-shell">
-                  <span className="sr-only">Tenant code</span>
+                  <span className="sr-only">Client ID</span>
                   <BuildingIcon />
                   <input
                     type="text"
-                    placeholder="Tenant code (platform admins: leave empty)"
+                    placeholder="Client ID"
                     autoComplete="organization"
                     value={tenantCode}
                     onChange={(e) => setTenantCode(e.target.value)}
@@ -121,7 +121,7 @@ export default function Login() {
 
             {isPlatformLogin && (
               <p className="signup-copy" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
-                Platform administrators can sign in without a tenant code.
+                Platform administrators can sign in without a client ID.
               </p>
             )}
 
@@ -138,6 +138,12 @@ export default function Login() {
               </>
             )}
           </p>
+          <div className="login-footer">
+            <p>
+              Powered by <strong>Trellisco ERP</strong>
+            </p>
+            <p>© Tixelise</p>
+          </div>
         </div>
       </section>
     </main>

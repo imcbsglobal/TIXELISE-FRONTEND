@@ -81,3 +81,6 @@ export const api = {
   patch: (path, body) => request(path, { method: 'PATCH', body }),
   delete: (path) => request(path, { method: 'DELETE' }),
 }
+
+console.log("TIXELISE API:", API_BASE_URL)
+console.log("VITE ENV:", import.meta.env.MODE)

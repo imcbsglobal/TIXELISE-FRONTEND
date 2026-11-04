@@ -1,4 +1,4 @@
-import { KeyRound, Pencil, UserPlus } from 'lucide-react'
+import { AlertTriangle, KeyRound, Pencil, Trash2, UserPlus } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui/badge'
 import { Alert } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/field'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
@@ -24,6 +24,8 @@ export default function Staff() {
 
   const [busyId, setBusyId] = useState(null)
   const [actionError, setActionError] = useState('')
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -80,6 +82,26 @@ export default function Staff() {
       setActionError(err.message)
     } finally {
       setBusyId(null)
+    }
+  }
+
+  function openDelete(staff) {
+    setActionError('')
+    setPendingDelete(staff)
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    setActionError('')
+    try {
+      await api.delete(`/admin/staff/${pendingDelete.id}/`)
+      setPendingDelete(null)
+      reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -224,6 +246,15 @@ export default function Staff() {
                             Deactivate
                           </Button>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive/90"
+                          disabled={busyId === s.id}
+                          onClick={() => openDelete(s)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -282,7 +313,7 @@ export default function Staff() {
               </p>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Username" hint="Must be unique across Tixelise.">
+                <Field label="Username" hint="Unique within your org — staff sign in with this and the client ID.">
                   <Input
                     value={form.username}
                     onChange={(e) => setForm({ ...form, username: e.target.value })}
@@ -303,7 +334,7 @@ export default function Staff() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Email" hint="Required">
+                <Field label="Email" hint="Required, unique within your org">
                   <Input
                     type="email"
                     required
@@ -313,7 +344,7 @@ export default function Staff() {
                     autoComplete="off"
                   />
                 </Field>
-                <Field label="Phone" hint="Required, unique per tenant">
+                <Field label="Phone" hint="Required, unique within your org">
                   <Input
                     required
                     value={form.phone}
@@ -416,6 +447,76 @@ export default function Staff() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !deleting) {
+            setPendingDelete(null)
+            setActionError('')
+          }
+        }}
+      >
+        <DialogContent>
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+            </span>
+            <DialogHeader className="pt-1">
+              <DialogTitle>Delete {pendingDelete?.staff_code} for good?</DialogTitle>
+              <DialogDescription>
+                <span className="font-medium text-foreground">{pendingDelete?.display_name}</span> will be removed
+                from this organization permanently.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="space-y-3">
+            {actionError && <Alert variant="error">{actionError}</Alert>}
+            <div className="rounded-[14px] border border-border bg-muted/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                What gets deleted
+              </p>
+              <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+                <li className="flex gap-2">
+                  <Trash2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  Their staff profile and POS login — sign-in stops working immediately.
+                </li>
+                <li className="flex gap-2">
+                  <Trash2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  Every event assignment they hold, so they can no longer sell.
+                </li>
+                <li className="flex gap-2">
+                  <Trash2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  Their account in the central user master, when one is linked.
+                </li>
+              </ul>
+            </div>
+            <p className="text-sm font-medium text-destructive">This cannot be undone.</p>
+            <p className="text-sm text-muted-foreground">
+              Staff with sales or issued tickets cannot be deleted, so their revenue history stays intact —
+              use <span className="font-medium text-foreground">Deactivate</span> for them instead.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPendingDelete(null)
+                setActionError('')
+              }}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmDelete} disabled={deleting}>
+              <Trash2 className="h-4 w-4" /> {deleting ? 'Deleting…' : 'Delete permanently'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
