@@ -43,6 +43,21 @@ const MAX_LENGTHS = {
   country: 100,
 }
 
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+const MAX_LOGO_BYTES = 2 * 1024 * 1024
+
+// Read a chosen file as raw base64 (the data-URL prefix is stripped, matching
+// the master's "base64 image" field). If the master later insists on the full
+// data URL, send reader.result as-is instead.
+function readAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '')
+    reader.onerror = () => reject(new Error('Could not read the selected file.'))
+    reader.readAsDataURL(file)
+  })
+}
+
 const REQUIRED_FIELDS = [
   ['company_name', 'Company name'],
   ['license_key', 'License key'],
@@ -132,6 +147,13 @@ function CompanyForm({
   })
   const [errors, setErrors] = useState({})
 
+  // The logo is write-only upstream, so it is kept apart from the text form: an
+  // edit that never touches it sends no logo key and leaves the stored image
+  // alone. logoData is the base64 to send; logoPreview is display-only.
+  const [logoData, setLogoData] = useState(null)
+  const [logoPreview, setLogoPreview] = useState(company?.logo_url || '')
+  const [logoError, setLogoError] = useState('')
+
   function setField(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
     setErrors((current) => {
@@ -142,16 +164,43 @@ function CompanyForm({
     })
   }
 
+  async function handleLogoChange(event) {
+    const file = event.target.files && event.target.files[0]
+    if (!file) {
+      setLogoData(null)
+      setLogoPreview(company?.logo_url || '')
+      setLogoError('')
+      return
+    }
+    if (!LOGO_TYPES.includes(file.type)) {
+      setLogoError('Use a PNG, JPEG or WEBP image.')
+      return
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoError('The image must be 2 MB or smaller.')
+      return
+    }
+    try {
+      setLogoData(await readAsBase64(file))
+      setLogoPreview(URL.createObjectURL(file))
+      setLogoError('')
+    } catch (err) {
+      setLogoError(err.message)
+    }
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
     const found = validate(form)
     setErrors(found)
-    if (Object.keys(found).length) return
+    if (Object.keys(found).length || logoError) return
 
     const payload = {}
     Object.keys(BLANK).forEach((key) => {
       payload[key] = typeof form[key] === 'string' ? form[key].trim() : form[key]
     })
+    // Only sent when a new file was chosen, so an edit can never blank the logo.
+    if (logoData) payload.logo = logoData
     onSubmit(payload)
   }
 
@@ -203,6 +252,25 @@ function CompanyForm({
               ))}
             </SelectContent>
           </Select>
+        </Field>
+
+        <Field label="Logo" hint="Optional. PNG, JPEG or WEBP, up to 2 MB." className="sm:col-span-2">
+          <div className="flex items-center gap-4">
+            <span className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-[13px] border border-input bg-muted">
+              {logoPreview ? (
+                <img src={logoPreview} alt="Company logo preview" className="h-full w-full object-contain" />
+              ) : (
+                <Building2 className="h-6 w-6 text-muted-foreground" />
+              )}
+            </span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleLogoChange}
+              className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-[#eaf3ee] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#053f33] hover:file:bg-[#dcece2]"
+            />
+          </div>
+          {logoError ? <p className="mt-1 text-xs font-semibold text-destructive">{logoError}</p> : null}
         </Field>
       </div>
 
@@ -350,9 +418,17 @@ export default function Company() {
             ) : (
               <>
                 <div className="mb-6 flex items-start gap-3.5">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#eaf3ee] text-[#053f33]">
-                    <Building2 className="h-[19px] w-[19px]" />
-                  </span>
+                  {company.logo_url ? (
+                    <img
+                      src={company.logo_url}
+                      alt={`${company.company_name} logo`}
+                      className="h-11 w-11 shrink-0 rounded-[13px] bg-white object-contain ring-1 ring-border"
+                    />
+                  ) : (
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#eaf3ee] text-[#053f33]">
+                      <Building2 className="h-[19px] w-[19px]" />
+                    </span>
+                  )}
                   <div className="min-w-0">
                     <p className="truncate font-display text-[19px] font-extrabold">{company.company_name}</p>
                     <p className="text-[13px] text-muted-foreground">

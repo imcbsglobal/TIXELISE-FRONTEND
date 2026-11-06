@@ -14,6 +14,7 @@ import Prices from './pages/tenant/Prices'
 import Staff from './pages/tenant/Staff'
 import Assignments from './pages/tenant/Assignments'
 import Company from './pages/tenant/Company'
+import TaxMaster from './pages/tenant/TaxMaster'
 import Sales from './pages/tenant/Sales'
 import Tickets from './pages/tenant/Tickets'
 import Reports from './pages/tenant/Reports'
@@ -79,6 +80,7 @@ export default function App() {
       <Route path="/tenant/staff" element={<TenantPage><Staff /></TenantPage>} />
       <Route path="/tenant/assignments" element={<TenantPage><Assignments /></TenantPage>} />
       <Route path="/tenant/company" element={<TenantPage><Company /></TenantPage>} />
+      <Route path="/tenant/tax-master" element={<TenantPage><TaxMaster /></TenantPage>} />
       <Route path="/tenant/sales" element={<TenantPage><Sales /></TenantPage>} />
       <Route path="/tenant/tickets" element={<TenantPage><Tickets /></TenantPage>} />
       <Route path="/tenant/reports" element={<TenantPage><Reports /></TenantPage>} />

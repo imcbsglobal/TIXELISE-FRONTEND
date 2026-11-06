@@ -8,6 +8,7 @@ import {
   Database,
   LayoutDashboard,
   LogOut,
+  Percent,
   Receipt,
   Rocket,
   Tags,
@@ -44,6 +45,7 @@ const NAVS = {
         icon: Database,
         children: [
           { to: '/tenant/company', label: 'Company', icon: Building2 },
+          { to: '/tenant/tax-master', label: 'Tax master', icon: Percent },
           { to: '/tenant/categories', label: 'Categories', icon: Tags },
           { to: '/tenant/prices', label: 'Prices', icon: Wallet },
           { to: '/tenant/staff', label: 'Staff', icon: Users },
@@ -78,6 +80,7 @@ const TITLES = {
   '/tenant/staff': 'Staff',
   '/tenant/assignments': 'Assignments',
   '/tenant/company': 'Company',
+  '/tenant/tax-master': 'Tax master',
   '/tenant/sales': 'Sales',
   '/tenant/tickets': 'Tickets',
   '/tenant/reports': 'Reports',
