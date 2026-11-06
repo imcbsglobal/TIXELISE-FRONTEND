@@ -105,12 +105,14 @@ export default function AppShell({ children }) {
   return (
     <div className="dashboard-density grid min-h-screen grid-cols-1 md:grid-cols-[256px_1fr]">
       <aside className="sticky top-0 z-10 flex h-auto flex-row items-center gap-4 overflow-x-auto border-b border-border bg-card px-4 py-3 md:h-screen md:flex-col md:items-stretch md:gap-0 md:overflow-visible md:border-b-0 md:border-r md:px-5 md:py-8">
-        <div className="flex items-center gap-2.5 font-display text-[21px] font-extrabold text-[#053f33]">
-          <span className="grid h-[27px] w-[27px] place-items-center rounded-[9px] bg-primary text-[20px] leading-none text-white">
-            t
-          </span>
-          <span>Tixelise</span>
-        </div>
+        {/* md:self-start is required: the sidebar is a stretched column, and
+            without it the logo's auto width is pulled to the full column while
+            the height stays fixed, distorting the wordmark. */}
+        <img
+          src="/assets/tixelise-logo-green.png"
+          alt="Tixelise"
+          className="h-7 w-auto shrink-0 md:h-8 md:self-start"
+        />
 
         <p className="hidden px-3 text-[10.5px] font-bold tracking-[0.16em] text-primary md:mb-2.5 md:mt-7 md:block">
           {nav.eyebrow}

@@ -4,15 +4,18 @@ import { api } from '@/api'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHead, RefreshButton } from '@/components/ui/page'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 // One company per logged-in tenant. The central master holds it; Tixelise only
 // proxies the call, so the client ID comes from the JWT, never from this form.
+// Product access is not part of this form: a new company is registered for
+// Tixelise alone (the backend default), and an edit sends no flags at all so any
+// access granted outside Tixelise is preserved. Status is left out too, so a new
+// record starts ACTIVE and an edit never re-activates one that was stopped.
 const ENDPOINT = '/admin/company-master/'
 
 const PRODUCTS = [
@@ -55,6 +58,7 @@ const REQUIRED_FIELDS = [
 ]
 
 const DETAIL_FIELDS = [
+  ['client_id', 'Client ID'],
   ...REQUIRED_FIELDS,
   ['address_line_2', 'Address line 2'],
   ['status', 'Status'],
@@ -73,9 +77,7 @@ const BLANK = {
   district: '',
   state: '',
   country: 'INDIA',
-  status: 'ACTIVE',
 }
-PRODUCTS.forEach((product) => (BLANK[product.key] = false))
 
 function fromCompany(company) {
   if (!company) return { ...BLANK }
@@ -94,9 +96,6 @@ function validate(form) {
   if (!errors.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
     errors.email = 'Enter a valid email address.'
   }
-  if (!PRODUCTS.some((product) => form[product.key])) {
-    errors.products = 'Select at least one product.'
-  }
   return errors
 }
 
@@ -113,8 +112,24 @@ function Detail({ label, value }) {
   )
 }
 
-function CompanyForm({ company, submitLabel, onSubmit, onCancel, busy, error }) {
-  const [form, setForm] = useState(() => fromCompany(company))
+function CompanyForm({
+  clientId,
+  licenseKey,
+  countries = [],
+  company,
+  submitLabel,
+  onSubmit,
+  onCancel,
+  busy,
+  error,
+}) {
+  const [form, setForm] = useState(() => {
+    const initial = company ? fromCompany(company) : { ...BLANK }
+    // A new company has no licence key of its own, so start from the one this
+    // client was licensed with. Editable, and sent as an ordinary field.
+    if (!initial.license_key) initial.license_key = licenseKey
+    return initial
+  })
   const [errors, setErrors] = useState({})
 
   function setField(key, value) {
@@ -140,6 +155,11 @@ function CompanyForm({ company, submitLabel, onSubmit, onCancel, busy, error }) 
     onSubmit(payload)
   }
 
+  // Keep whatever is already stored selectable even when the central list no
+  // longer offers it, so an edit can never quietly rewrite the country.
+  const countryOptions =
+    form.country && !countries.includes(form.country) ? [form.country, ...countries] : countries
+
   const textField = (key, label, hint) => (
     <Field label={label} hint={hint}>
       <Input
@@ -156,8 +176,11 @@ function CompanyForm({ company, submitLabel, onSubmit, onCancel, busy, error }) 
       {error && <Alert variant="error">{error}</Alert>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {textField('company_name', 'Company name', 'Unique within your client ID.')}
-        {textField('license_key', 'License key', 'Unique within your client ID.')}
+        <Field label="Client ID" className="sm:col-span-2">
+          <Input value={clientId} readOnly tabIndex={-1} className="font-mono cursor-default" />
+        </Field>
+        {textField('company_name', 'Company name')}
+        {textField('license_key', 'License key')}
         {textField('gst_number', 'GST number')}
         {textField('pan_number', 'PAN number')}
         {textField('email', 'Email')}
@@ -167,36 +190,20 @@ function CompanyForm({ company, submitLabel, onSubmit, onCancel, busy, error }) 
         {textField('city', 'City')}
         {textField('district', 'District')}
         {textField('state', 'State')}
-        {textField('country', 'Country')}
-        <Field label="Status">
-          <Select value={form.status} onValueChange={(v) => setField('status', v)}>
+        <Field label="Country">
+          <Select value={form.country} onValueChange={(value) => setField('country', value)}>
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Select a country" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ACTIVE">ACTIVE</SelectItem>
-              <SelectItem value="INACTIVE">INACTIVE</SelectItem>
+              {countryOptions.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </Field>
-      </div>
-
-      <div>
-        <p className="mb-2 text-[13px] font-semibold">Product access - at least one required</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {PRODUCTS.map((product) => (
-            <label key={product.key} className="flex cursor-pointer items-center gap-2.5 text-sm">
-              <Checkbox
-                checked={form[product.key] === true}
-                onCheckedChange={(v) => setField(product.key, v === true)}
-              />
-              {product.label}
-            </label>
-          ))}
-        </div>
-        {errors.products ? (
-          <p className="mt-1.5 text-xs font-semibold text-destructive">{errors.products}</p>
-        ) : null}
       </div>
 
       <div className="flex items-center justify-end gap-2.5">
@@ -215,6 +222,8 @@ function CompanyForm({ company, submitLabel, onSubmit, onCancel, busy, error }) 
 
 export default function Company() {
   const [clientId, setClientId] = useState('')
+  const [licenseKey, setLicenseKey] = useState('')
+  const [countries, setCountries] = useState([])
   const [company, setCompany] = useState(null)
   const [extra, setExtra] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -241,6 +250,8 @@ export default function Company() {
         if (cancelled) return
         const rows = Array.isArray(res?.results) ? res.results : []
         setClientId(res?.client_id || '')
+        setLicenseKey(res?.license_key || '')
+        setCountries(Array.isArray(res?.countries) ? res.countries : [])
         setCompany(rows[0] || null)
         setExtra(Math.max(0, rows.length - 1))
         setEditing(false)
@@ -310,7 +321,7 @@ export default function Company() {
         <RefreshButton loading={loading} onClick={reload} />
       </PageHead>
 
-      <div className="mx-auto w-full max-w-[880px]">
+      <div className="mx-auto w-full max-w-[1040px]">
         {error && <Alert variant="error" className="mb-5">{error}</Alert>}
         {notice && !error && <Alert variant="success" className="mb-5">{notice}</Alert>}
         {extra > 0 && (
@@ -327,6 +338,9 @@ export default function Company() {
             ) : showForm ? (
               <CompanyForm
                 key={company?.id ?? 'new'}
+                clientId={clientId}
+                licenseKey={licenseKey}
+                countries={countries}
                 company={editing ? company : null}
                 submitLabel={company ? 'Save changes' : 'Create company'}
                 onSubmit={handleSubmit}

@@ -55,12 +55,17 @@ export default function Login() {
   return (
     <main className="login-card">
       <section className="art-panel" aria-label="Tixelise event management illustration">
-        <div className="brand"><span className="brand-mark">t</span><span>Tixelise</span></div>
+        <div className="brand">
+          <img className="brand-logo" src="/assets/tixelise-logo-green.png" alt="Tixelise" />
+        </div>
         <img src="/assets/Login_vector.png" alt="Event attendant holding a ticket scanner" />
       </section>
 
       <section className="form-panel">
         <div className="form-wrap">
+          {/* Only shown once the art panel is hidden, so small screens keep the
+              brand without carrying the illustration. */}
+          <img className="mobile-brand" src="/assets/tixelise-logo-green.png" alt="Tixelise" />
           <div className="welcome-copy">
             <p className="eyebrow">WELCOME BACK</p>
             <h1>{isPlatformLogin ? 'Platform admin login' : 'Log in'}</h1>
