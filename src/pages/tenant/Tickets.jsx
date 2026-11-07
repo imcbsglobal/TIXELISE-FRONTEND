@@ -1,4 +1,4 @@
-import { Eye, Printer, Settings2 } from 'lucide-react'
+import { Eye, Printer } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import PrintSettingsDialog from '@/components/PrintSettingsDialog'
 import PrintTicketDialog from '@/components/PrintTicketDialog'
 
 const PAGE_SIZE = 20
@@ -46,7 +45,6 @@ export default function Tickets() {
 
   const [reprint, setReprint] = useState(null)
   const [printId, setPrintId] = useState(null)
-  const [printSettingsOpen, setPrintSettingsOpen] = useState(false)
 
   useEffect(() => {
     document.title = 'Tixelise | Tickets'
@@ -113,12 +111,7 @@ export default function Tickets() {
   return (
     <>
       <PageHead eyebrow="ISSUED TICKETS" title="Tickets" subtitle="Every ticket issued by your staff, with reprint history.">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setPrintSettingsOpen(true)}>
-            <Settings2 className="h-4 w-4" /> Print settings
-          </Button>
-          <RefreshButton loading={loading} onClick={reload} />
-        </div>
+        <RefreshButton loading={loading} onClick={reload} />
       </PageHead>
 
       {actionError && <Alert variant="error" className="mb-5">{actionError}</Alert>}
@@ -302,8 +295,6 @@ export default function Tickets() {
         open={!!printId}
         onOpenChange={(open) => !open && setPrintId(null)}
       />
-
-      <PrintSettingsDialog open={printSettingsOpen} onOpenChange={setPrintSettingsOpen} />
     </>
   )
 }
