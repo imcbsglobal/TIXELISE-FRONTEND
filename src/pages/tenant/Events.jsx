@@ -31,6 +31,7 @@ const STATUSES = ['draft', 'active', 'completed', 'cancelled']
 const EMPTY_FORM = {
   code: '',
   name: '',
+  event_type: 'regular',
   description: '',
   venue: '',
   address: '',
@@ -39,6 +40,11 @@ const EMPTY_FORM = {
   sales_start_at: '',
   sales_end_at: '',
 }
+
+const EVENT_TYPES = [
+  { value: 'regular', label: 'Regular event' },
+  { value: 'periodical', label: 'Periodical event' },
+]
 
 function toLocalInput(iso) {
   if (!iso) return ''
@@ -147,17 +153,21 @@ export default function Events() {
     setCreateError('')
     setCreating(true)
     try {
-      await api.post('/admin/events/', {
+      const payload = {
         code: form.code.trim().toUpperCase(),
         name: form.name.trim(),
+        event_type: form.event_type,
         description: form.description.trim(),
         venue: form.venue.trim(),
         address: form.address.trim(),
-        start_at: toIso(form.start_at),
-        end_at: toIso(form.end_at),
-        ...(form.sales_start_at ? { sales_start_at: toIso(form.sales_start_at) } : {}),
-        ...(form.sales_end_at ? { sales_end_at: toIso(form.sales_end_at) } : {}),
-      })
+      }
+      if (form.event_type === 'periodical') {
+        payload.start_at = toIso(form.start_at)
+        payload.end_at = toIso(form.end_at)
+        if (form.sales_start_at) payload.sales_start_at = toIso(form.sales_start_at)
+        if (form.sales_end_at) payload.sales_end_at = toIso(form.sales_end_at)
+      }
+      await api.post('/admin/events/', payload)
       setForm(EMPTY_FORM)
       setCreateOpen(false)
       setPage(1)
@@ -176,6 +186,7 @@ export default function Events() {
     setDetailForm({
       code: ev.code,
       name: ev.name,
+      event_type: ev.event_type || 'periodical',
       description: ev.description || '',
       venue: ev.venue || '',
       address: ev.address || '',
@@ -191,17 +202,21 @@ export default function Events() {
     setDetailError('')
     setSavingDetail(true)
     try {
-      await api.patch(`/admin/events/${detail.id}/`, {
+      const payload = {
         code: detailForm.code.trim().toUpperCase(),
         name: detailForm.name.trim(),
+        event_type: detailForm.event_type,
         description: detailForm.description.trim(),
         venue: detailForm.venue.trim(),
         address: detailForm.address.trim(),
-        start_at: toIso(detailForm.start_at),
-        end_at: toIso(detailForm.end_at),
-        sales_start_at: detailForm.sales_start_at ? toIso(detailForm.sales_start_at) : null,
-        sales_end_at: detailForm.sales_end_at ? toIso(detailForm.sales_end_at) : null,
-      })
+      }
+      if (detailForm.event_type === 'periodical') {
+        payload.start_at = toIso(detailForm.start_at)
+        payload.end_at = toIso(detailForm.end_at)
+        payload.sales_start_at = detailForm.sales_start_at ? toIso(detailForm.sales_start_at) : null
+        payload.sales_end_at = detailForm.sales_end_at ? toIso(detailForm.sales_end_at) : null
+      }
+      await api.patch(`/admin/events/${detail.id}/`, payload)
       reload()
       setDetail(null)
     } catch (err) {
@@ -329,7 +344,9 @@ export default function Events() {
                       <TableCell className="font-medium">{ev.name}</TableCell>
                       <TableCell className="text-muted-foreground">{ev.venue || '—'}</TableCell>
                       <TableCell className="text-muted-foreground">{new Date(ev.start_at).toLocaleString()}</TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(ev.end_at).toLocaleString()}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {ev.end_at ? new Date(ev.end_at).toLocaleString() : 'No end'}
+                      </TableCell>
                       <TableCell>
                         <StatusBadge status={ev.status} />
                       </TableCell>
@@ -365,7 +382,9 @@ export default function Events() {
                     </div>
                     <div className="flex justify-between gap-3">
                       <dt className="shrink-0 text-muted-foreground">Ends</dt>
-                      <dd className="text-right font-medium">{new Date(ev.end_at).toLocaleString()}</dd>
+                      <dd className="text-right font-medium">
+                        {ev.end_at ? new Date(ev.end_at).toLocaleString() : 'No end'}
+                      </dd>
                     </div>
                   </dl>
                   <div className="mt-4 border-t border-border pt-3">{actionButtons(ev)}</div>
@@ -435,20 +454,45 @@ export default function Events() {
               Schedule
             </p>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Starts at">
-                <Input type="datetime-local" value={form.start_at} onChange={(e) => setForm({ ...form, start_at: e.target.value })} required />
-              </Field>
-              <Field label="Ends at">
-                <Input type="datetime-local" value={form.end_at} onChange={(e) => setForm({ ...form, end_at: e.target.value })} required />
-              </Field>
-              <Field label="Sales open" hint="Optional">
-                <Input type="datetime-local" value={form.sales_start_at} onChange={(e) => setForm({ ...form, sales_start_at: e.target.value })} />
-              </Field>
-              <Field label="Sales close" hint="Optional">
-                <Input type="datetime-local" value={form.sales_end_at} onChange={(e) => setForm({ ...form, sales_end_at: e.target.value })} />
-              </Field>
-            </div>
+            <Field
+              label="Event type"
+              hint="Regular events start now, have no end date, and need no schedule."
+            >
+              <Select value={form.event_type} onValueChange={(v) => setForm({ ...form, event_type: v })}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVENT_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {form.event_type === 'regular' ? (
+              <p className="rounded-md bg-muted px-4 py-3 text-[13px] text-muted-foreground">
+                Starts now with sales open immediately. A regular event has no end date — it keeps
+                selling until you mark it completed or cancelled.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Starts at">
+                  <Input type="datetime-local" value={form.start_at} onChange={(e) => setForm({ ...form, start_at: e.target.value })} required />
+                </Field>
+                <Field label="Ends at">
+                  <Input type="datetime-local" value={form.end_at} onChange={(e) => setForm({ ...form, end_at: e.target.value })} required />
+                </Field>
+                <Field label="Sales open" hint="Optional">
+                  <Input type="datetime-local" value={form.sales_start_at} onChange={(e) => setForm({ ...form, sales_start_at: e.target.value })} />
+                </Field>
+                <Field label="Sales close" hint="Optional">
+                  <Input type="datetime-local" value={form.sales_end_at} onChange={(e) => setForm({ ...form, sales_end_at: e.target.value })} />
+                </Field>
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
@@ -507,20 +551,45 @@ export default function Events() {
                 Schedule
               </p>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Starts at">
-                  <Input type="datetime-local" value={detailForm.start_at} onChange={(e) => setDetailForm({ ...detailForm, start_at: e.target.value })} required />
-                </Field>
-                <Field label="Ends at">
-                  <Input type="datetime-local" value={detailForm.end_at} onChange={(e) => setDetailForm({ ...detailForm, end_at: e.target.value })} required />
-                </Field>
-                <Field label="Sales open">
-                  <Input type="datetime-local" value={detailForm.sales_start_at} onChange={(e) => setDetailForm({ ...detailForm, sales_start_at: e.target.value })} />
-                </Field>
-                <Field label="Sales close">
-                  <Input type="datetime-local" value={detailForm.sales_end_at} onChange={(e) => setDetailForm({ ...detailForm, sales_end_at: e.target.value })} />
-                </Field>
-              </div>
+              <Field label="Event type" hint="Switching to periodical requires a start and end time.">
+                <Select
+                  value={detailForm.event_type}
+                  onValueChange={(v) => setDetailForm({ ...detailForm, event_type: v })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {detailForm.event_type === 'regular' ? (
+                <p className="rounded-md bg-muted px-4 py-3 text-[13px] text-muted-foreground">
+                  Started {new Date(detailForm.start_at || detail.start_at).toLocaleString()} · no end
+                  date. Selling stays open until the event is completed or cancelled.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Starts at">
+                    <Input type="datetime-local" value={detailForm.start_at} onChange={(e) => setDetailForm({ ...detailForm, start_at: e.target.value })} required />
+                  </Field>
+                  <Field label="Ends at">
+                    <Input type="datetime-local" value={detailForm.end_at} onChange={(e) => setDetailForm({ ...detailForm, end_at: e.target.value })} required />
+                  </Field>
+                  <Field label="Sales open">
+                    <Input type="datetime-local" value={detailForm.sales_start_at} onChange={(e) => setDetailForm({ ...detailForm, sales_start_at: e.target.value })} />
+                  </Field>
+                  <Field label="Sales close">
+                    <Input type="datetime-local" value={detailForm.sales_end_at} onChange={(e) => setDetailForm({ ...detailForm, sales_end_at: e.target.value })} />
+                  </Field>
+                </div>
+              )}
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDetail(null)}>

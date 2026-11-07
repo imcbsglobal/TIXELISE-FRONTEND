@@ -3,9 +3,7 @@ import { api, API_BASE_URL } from '@/api'
 export const SETUP_STEPS = [
   { id: 1, key: 'event', title: 'Event', blurb: 'Name your event and set the schedule' },
   { id: 2, key: 'ticketTypes', title: 'Ticket types', blurb: 'Create the kinds of tickets you sell' },
-  { id: 3, key: 'staff', title: 'Staff', blurb: 'Pick the existing staff who will sell tickets' },
-  { id: 4, key: 'assign', title: 'Assign', blurb: 'Let staff sell for this event' },
-  { id: 5, key: 'activate', title: 'Make live', blurb: 'Review everything and open for sales' },
+  { id: 3, key: 'activate', title: 'Make live', blurb: 'Review everything and open for sales' },
 ]
 
 export const DRAFT_PREFIX = 'tixelise.setup.draft.v1'
@@ -49,7 +47,6 @@ export function isDraftEmpty(draft) {
   if (!draft) return true
   if (draft.event) return false
   if ((draft.ticketTypes || []).some((r) => r.name || r.code || r.price)) return false
-  if ((draft.staff || []).some((r) => r.display_name || r.staff_code || r.username)) return false
   return !draft.step || draft.step <= 1
 }
 

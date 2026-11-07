@@ -8,15 +8,14 @@ import { PageHead } from '@/components/ui/page'
 import { Stepper } from '@/components/setup/Stepper'
 import EventStep from '@/components/setup/steps/EventStep'
 import TicketTypesStep from '@/components/setup/steps/TicketTypesStep'
-import StaffStep from '@/components/setup/steps/StaffStep'
-import AssignStep from '@/components/setup/steps/AssignStep'
 import ActivateStep from '@/components/setup/steps/ActivateStep'
-import { SETUP_STEPS, clearDraft, fetchAll, loadDraft, nextCode, saveDraft, uid } from '@/lib/setup'
+import { SETUP_STEPS, clearDraft, fetchAll, loadDraft, nextCode, saveDraft } from '@/lib/setup'
 
 const EMPTY_EVENT = {
   code: '',
   codeTouched: false,
   name: '',
+  event_type: 'regular',
   description: '',
   venue: '',
   address: '',
@@ -24,22 +23,6 @@ const EMPTY_EVENT = {
   end_at: '',
   sales_start_at: '',
   sales_end_at: '',
-}
-
-function blankAssignRow(member, selected) {
-  return {
-    uid: uid(),
-    staffId: member.id,
-    staff_code: member.staff_code,
-    display_name: member.display_name,
-    selected,
-    restrict: false,
-    allowed: [],
-    valid_from: '',
-    valid_until: '',
-    status: 'pending',
-    message: '',
-  }
 }
 
 export default function Setup() {
@@ -51,9 +34,7 @@ export default function Setup() {
   const [event, setEvent] = useState(null)
   const [eventForm, setEventForm] = useState(EMPTY_EVENT)
   const [ticketRows, setTicketRows] = useState([])
-  const [staffRows, setStaffRows] = useState([])
-  const [assignRows, setAssignRows] = useState([])
-  const [refs, setRefs] = useState({ events: [], categories: [], staff: [] })
+  const [refs, setRefs] = useState({ events: [], categories: [] })
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [activated, setActivated] = useState(false)
@@ -64,12 +45,11 @@ export default function Setup() {
 
   const loadRefs = useCallback(async () => {
     try {
-      const [events, categories, staff] = await Promise.all([
+      const [events, categories] = await Promise.all([
         fetchAll('/admin/events/'),
         fetchAll('/admin/categories/'),
-        fetchAll('/admin/staff/'),
       ])
-      setRefs({ events, categories, staff })
+      setRefs({ events, categories })
       setLoadError(null)
       // Suggest the first free event code once we know what already exists.
       setEventForm((current) => {
@@ -90,12 +70,18 @@ export default function Setup() {
       const draft = loadDraft(tenantCode)
       if (draft && !draft.startedOver) {
         if (draft.event) setEvent(draft.event)
-        if (draft.eventForm) setEventForm({ ...EMPTY_EVENT, ...draft.eventForm })
+        if (draft.eventForm) {
+          // Drafts saved before event types existed keep their original schedule.
+          const saved = draft.eventForm
+          setEventForm({
+            ...EMPTY_EVENT,
+            ...saved,
+            event_type: saved.event_type || (saved.start_at ? 'periodical' : EMPTY_EVENT.event_type),
+          })
+        }
         if (Array.isArray(draft.ticketTypes)) setTicketRows(draft.ticketTypes)
-        // Only keep picked staff rows — older drafts could hold typed-in accounts.
-        if (Array.isArray(draft.staff)) setStaffRows(draft.staff.filter((row) => row.staffId))
-        if (Array.isArray(draft.assign)) setAssignRows(draft.assign)
-        if (draft.step) setStep(draft.step)
+        // Clamp: older drafts could be saved on the removed step 4/5.
+        if (draft.step) setStep(Math.min(Math.max(Number(draft.step) || 1, 1), 3))
         if (draft.activated) setActivated(true)
       }
       await loadRefs()
@@ -116,52 +102,20 @@ export default function Setup() {
       event,
       eventForm,
       ticketTypes: ticketRows,
-      staff: staffRows,
-      assign: assignRows,
       activated,
     })
-  }, [step, event, eventForm, ticketRows, staffRows, assignRows, activated, loading, tenantCode])
+  }, [step, event, eventForm, ticketRows, activated, loading, tenantCode])
 
   const ticketTypesReady = ticketRows.length > 0 && ticketRows.every((row) => row.status === 'created' || row.status === 'reused')
-  const staffReady =
-    staffRows.length === 0 || staffRows.every((row) => row.status === 'created' || row.status === 'reused')
-  const assignedCount = assignRows.filter((row) => row.selected && row.status === 'created').length
 
   const statuses = useMemo(
     () => ({
       1: step === 1 ? 'current' : event ? 'done' : 'pending',
       2: step === 2 ? 'current' : ticketTypesReady ? 'done' : 'pending',
-      3: step === 3 ? 'current' : staffRows.length && staffReady ? 'done' : 'pending',
-      4: step === 4 ? 'current' : assignedCount > 0 ? 'done' : 'pending',
-      5: step === 5 ? (activated ? 'done' : 'current') : activated ? 'done' : 'pending',
+      3: step === 3 ? (activated ? 'done' : 'current') : activated ? 'done' : 'pending',
     }),
-    [event, ticketTypesReady, staffReady, staffRows.length, assignedCount, step, activated],
+    [event, ticketTypesReady, step, activated],
   )
-
-  function buildAssignRows() {
-    const list = []
-    const seen = new Set()
-
-    staffRows.forEach((row) => {
-      if (row.status !== 'created' && row.status !== 'reused') return
-      if (!row.staffId) return
-      seen.add(row.staffId)
-      list.push(blankAssignRow({ id: row.staffId, staff_code: row.staff_code, display_name: row.display_name }, true))
-    })
-
-    refs.staff.forEach((member) => {
-      if (seen.has(member.id)) return
-      if (member.status !== 'active') return
-      list.push(blankAssignRow(member, false))
-    })
-
-    return list
-  }
-
-  function goToAssign() {
-    setAssignRows((current) => (current.length ? current : buildAssignRows()))
-    setStep(4)
-  }
 
   function handleEventCreated(created) {
     setEvent(created)
@@ -199,8 +153,6 @@ export default function Setup() {
     setEvent(null)
     setEventForm(EMPTY_EVENT)
     setTicketRows([])
-    setStaffRows([])
-    setAssignRows([])
     setActivated(false)
   }
 
@@ -209,16 +161,12 @@ export default function Setup() {
     navigate('/tenant/events')
   }
 
-  const ticketTypeOptions = ticketRows
-    .filter((row) => row.categoryId)
-    .map((row) => ({ uid: row.uid, code: row.code, categoryId: row.categoryId }))
-
   return (
     <>
       <PageHead
         eyebrow="SETUP"
         title="Set up your first event"
-        subtitle="Five short steps: create the event, add ticket types and prices, pick staff, let them sell, then go live."
+        subtitle="Three short steps: create the event, add ticket types and prices, then go live."
       >
         <Button variant="outline" onClick={startOver}>
           <RotateCcw className="h-4 w-4" /> Start over
@@ -265,40 +213,16 @@ export default function Setup() {
         />
       ) : null}
 
-      {step === 3 ? (
-        <StaffStep
-          rows={staffRows}
-          setRows={setStaffRows}
-          staff={refs.staff}
-          onNext={goToAssign}
-          onBack={() => setStep(2)}
-        />
-      ) : null}
-
-      {step === 4 ? (
-        <AssignStep
-          event={event}
-          rows={assignRows}
-          setRows={setAssignRows}
-          ticketTypes={ticketTypeOptions}
-          onNext={() => setStep(5)}
-          onSkip={() => setStep(5)}
-          onBack={() => setStep(3)}
-        />
-      ) : null}
-
-      {step === 5 && event ? (
+      {step === 3 && event ? (
         <ActivateStep
           event={event}
           ticketTypes={ticketRows}
-          staffRows={staffRows}
-          assignRows={assignRows}
           activated={activated}
           onActivated={() => {
             setActivated(true)
             clearDraft(tenantCode)
           }}
-          onBack={() => setStep(4)}
+          onBack={() => setStep(2)}
           onKeepDraft={keepAsDraft}
           onRestart={startOver}
         />

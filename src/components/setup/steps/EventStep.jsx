@@ -7,8 +7,20 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { FieldError } from '@/components/setup/FieldError'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { StepShell } from '@/components/setup/StepShell'
 import { friendlyError, isDuplicateMessage, localTimeZone, toUtcIso, uniqueCodeFromName } from '@/lib/setup'
+
+const EVENT_TYPES = [
+  { value: 'regular', label: 'Regular event' },
+  { value: 'periodical', label: 'Periodical event' },
+]
 
 function validate(form) {
   const problems = {}
@@ -16,13 +28,16 @@ function validate(form) {
   if (!code) problems.code = 'Give the event a short code, for example EV001.'
   else if (!/^[A-Za-z0-9]+$/.test(code)) problems.code = 'Use only letters and numbers.'
   if (!form.name.trim()) problems.name = 'Give the event a name people will recognise.'
-  if (!form.start_at) problems.start_at = 'When does the event start?'
-  if (!form.end_at) problems.end_at = 'When does the event end?'
-  if (form.start_at && form.end_at && new Date(form.end_at) <= new Date(form.start_at)) {
-    problems.end_at = 'The end time must be later than the start time.'
-  }
-  if (form.sales_start_at && form.sales_end_at && new Date(form.sales_end_at) <= new Date(form.sales_start_at)) {
-    problems.sales_end_at = 'Sales close must be later than sales open.'
+  // A regular event starts now and never ends, so it has no schedule to fill in.
+  if (form.event_type === 'periodical') {
+    if (!form.start_at) problems.start_at = 'When does the event start?'
+    if (!form.end_at) problems.end_at = 'When does the event end?'
+    if (form.start_at && form.end_at && new Date(form.end_at) <= new Date(form.start_at)) {
+      problems.end_at = 'The end time must be later than the start time.'
+    }
+    if (form.sales_start_at && form.sales_end_at && new Date(form.sales_end_at) <= new Date(form.sales_start_at)) {
+      problems.sales_end_at = 'Sales close must be later than sales open.'
+    }
   }
   return problems
 }
@@ -96,17 +111,21 @@ export default function EventStep({
     setFieldErrors({})
 
     try {
-      const created = await api.post('/admin/events/', {
+      const payload = {
         code: form.code.trim().toUpperCase(),
         name: form.name.trim(),
+        event_type: form.event_type,
         description: form.description.trim(),
         venue: form.venue.trim(),
         address: form.address.trim(),
-        start_at: toUtcIso(form.start_at),
-        end_at: toUtcIso(form.end_at),
-        ...(form.sales_start_at ? { sales_start_at: toUtcIso(form.sales_start_at) } : {}),
-        ...(form.sales_end_at ? { sales_end_at: toUtcIso(form.sales_end_at) } : {}),
-      })
+      }
+      if (form.event_type === 'periodical') {
+        payload.start_at = toUtcIso(form.start_at)
+        payload.end_at = toUtcIso(form.end_at)
+        if (form.sales_start_at) payload.sales_start_at = toUtcIso(form.sales_start_at)
+        if (form.sales_end_at) payload.sales_end_at = toUtcIso(form.sales_end_at)
+      }
+      const created = await api.post('/admin/events/', payload)
       onCreated(created)
     } catch (err) {
       const friendly = friendlyError(err)
@@ -150,7 +169,7 @@ export default function EventStep({
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Ends</dt>
-              <dd className="font-medium">{formatWhen(event.end_at)}</dd>
+              <dd className="font-medium">{event.end_at ? formatWhen(event.end_at) : 'No end'}</dd>
             </div>
             {event.venue ? (
               <div className="flex justify-between gap-4">
@@ -264,51 +283,82 @@ export default function EventStep({
             Schedule
           </p>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <Field label="Starts at">
-              <Input
-                type="datetime-local"
-                value={form.start_at}
-                onChange={(e) => update({ start_at: e.target.value })}
-                className={fieldErrors.start_at ? 'border-destructive/40' : undefined}
-              />
-              <FieldError>{fieldErrors.start_at}</FieldError>
-            </Field>
-            <Field label="Ends at">
-              <Input
-                type="datetime-local"
-                value={form.end_at}
-                onChange={(e) => update({ end_at: e.target.value })}
-                className={fieldErrors.end_at ? 'border-destructive/40' : undefined}
-              />
-              <FieldError>{fieldErrors.end_at}</FieldError>
-            </Field>
-            <Field label="Sales open" hint="Optional — when the POS may start selling.">
-              <Input
-                type="datetime-local"
-                value={form.sales_start_at}
-                onChange={(e) => update({ sales_start_at: e.target.value })}
-                className={fieldErrors.sales_start_at ? 'border-destructive/40' : undefined}
-              />
-              <FieldError>{fieldErrors.sales_start_at}</FieldError>
-            </Field>
-            <Field label="Sales close" hint="Optional — when selling stops.">
-              <Input
-                type="datetime-local"
-                value={form.sales_end_at}
-                onChange={(e) => update({ sales_end_at: e.target.value })}
-                className={fieldErrors.sales_end_at ? 'border-destructive/40' : undefined}
-              />
-              <FieldError>{fieldErrors.sales_end_at}</FieldError>
-            </Field>
-          </div>
+          <Field
+            label="Event type"
+            hint="Regular events start now, have no end date, and need no schedule."
+            className="mb-5"
+          >
+            <Select value={form.event_type} onValueChange={(value) => update({ event_type: value })}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EVENT_TYPES.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
 
-          <p className="mt-4 flex items-start gap-2 rounded-lg bg-muted px-3.5 py-2.5 text-xs text-muted-foreground">
-            <Info className="mt-[2px] h-3.5 w-3.5 shrink-0" />
-            <span>
-              Times are entered in your device time zone ({localTimeZone()}) and stored safely in UTC.
-            </span>
-          </p>
+          {form.event_type === 'regular' ? (
+            <p className="flex items-start gap-2 rounded-lg bg-muted px-3.5 py-2.5 text-xs text-muted-foreground">
+              <Info className="mt-[2px] h-3.5 w-3.5 shrink-0" />
+              <span>
+                Starts now with sales open immediately. A regular event has no end date — it keeps
+                selling until you mark it completed or cancelled.
+              </span>
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <Field label="Starts at">
+                  <Input
+                    type="datetime-local"
+                    value={form.start_at}
+                    onChange={(e) => update({ start_at: e.target.value })}
+                    className={fieldErrors.start_at ? 'border-destructive/40' : undefined}
+                  />
+                  <FieldError>{fieldErrors.start_at}</FieldError>
+                </Field>
+                <Field label="Ends at">
+                  <Input
+                    type="datetime-local"
+                    value={form.end_at}
+                    onChange={(e) => update({ end_at: e.target.value })}
+                    className={fieldErrors.end_at ? 'border-destructive/40' : undefined}
+                  />
+                  <FieldError>{fieldErrors.end_at}</FieldError>
+                </Field>
+                <Field label="Sales open" hint="Optional — when the POS may start selling.">
+                  <Input
+                    type="datetime-local"
+                    value={form.sales_start_at}
+                    onChange={(e) => update({ sales_start_at: e.target.value })}
+                    className={fieldErrors.sales_start_at ? 'border-destructive/40' : undefined}
+                  />
+                  <FieldError>{fieldErrors.sales_start_at}</FieldError>
+                </Field>
+                <Field label="Sales close" hint="Optional — when selling stops.">
+                  <Input
+                    type="datetime-local"
+                    value={form.sales_end_at}
+                    onChange={(e) => update({ sales_end_at: e.target.value })}
+                    className={fieldErrors.sales_end_at ? 'border-destructive/40' : undefined}
+                  />
+                  <FieldError>{fieldErrors.sales_end_at}</FieldError>
+                </Field>
+              </div>
+
+              <p className="mt-4 flex items-start gap-2 rounded-lg bg-muted px-3.5 py-2.5 text-xs text-muted-foreground">
+                <Info className="mt-[2px] h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Times are entered in your device time zone ({localTimeZone()}) and stored safely in UTC.
+                </span>
+              </p>
+            </>
+          )}
         </div>
       </form>
     </StepShell>

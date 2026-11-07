@@ -287,8 +287,8 @@ export default function TicketTypesStep({ event, rows, setRows, categories, onCa
 
       {summary && summary.failed === 0 ? (
         <Alert variant="success">
-          {summary.created} ticket {summary.created === 1 ? 'type' : 'types'} saved with prices. Your event can go live
-          once staff are assigned.
+          {summary.created} ticket {summary.created === 1 ? 'type' : 'types'} saved with prices. You can now make the
+          event live.
         </Alert>
       ) : null}
 
