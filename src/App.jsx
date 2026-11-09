@@ -22,7 +22,6 @@ import Tickets from './pages/tenant/Tickets'
 import Reports from './pages/tenant/Reports'
 import StaffReport from './pages/tenant/StaffReport'
 import Audit from './pages/tenant/Audit'
-import Setup from './pages/tenant/Setup'
 
 function RequireRole({ role, children }) {
   const session = getSession()
@@ -86,7 +85,6 @@ export default function App() {
 
       <Route path="/tenant" element={<TenantPage><TenantDashboard /></TenantPage>} />
       <Route path="/tenant/profile" element={<TenantPage><Profile /></TenantPage>} />
-      <Route path="/tenant/setup" element={<TenantPage><Setup /></TenantPage>} />
       <Route path="/tenant/events" element={<TenantPage><Events /></TenantPage>} />
       <Route path="/tenant/categories" element={<TenantPage><Categories /></TenantPage>} />
       <Route path="/tenant/prices" element={<TenantPage><Prices /></TenantPage>} />

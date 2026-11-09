@@ -90,7 +90,6 @@ const TITLES = {
   '/platform': 'Dashboard',
   '/platform/tenants': 'Tenants',
   '/tenant': 'Dashboard',
-  '/tenant/setup': 'Setup',
   '/tenant/events': 'Events',
   '/tenant/categories': 'Categories',
   '/tenant/prices': 'Prices',

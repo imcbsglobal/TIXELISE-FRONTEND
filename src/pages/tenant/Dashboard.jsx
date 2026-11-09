@@ -60,7 +60,7 @@ export default function Dashboard() {
         subtitle={`Today's ticketing activity for your organization${stats ? ` · ${stats.date} (${stats.timezone})` : ''}.`}
       >
         <Button asChild>
-          <Link to="/tenant/setup">
+          <Link to="/tenant/events">
             Setup event <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
