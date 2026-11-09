@@ -318,7 +318,7 @@ export default function Assignments() {
               <CardContent className="p-6 text-sm text-muted-foreground">
                 No staff members yet. Create a login for your counter staff first.{' '}
                 <Link to="/tenant/staff" className="font-semibold text-primary underline">
-                  Go to the Staff page
+                  Go to User management
                 </Link>
               </CardContent>
             </Card>

@@ -68,9 +68,9 @@ export default function StaffStep({ rows, setRows, staff, onNext, onBack }) {
 
         {staff.length === 0 ? (
           <div className="mt-3 rounded-lg bg-muted px-3.5 py-3 text-[13.5px] text-muted-foreground">
-            <p>Your organization has no staff yet. Create the people who will sell tickets on the Staff page first.</p>
+            <p>Your organization has no staff yet. Create the people who will sell tickets on the User management page first.</p>
             <Link to="/tenant/staff" className="mt-2 inline-block font-semibold text-primary underline">
-              Go to the Staff page
+              Go to User management
             </Link>
           </div>
         ) : (

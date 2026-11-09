@@ -5,6 +5,7 @@ import { getSession } from './session'
 import AppShell from './components/AppShell'
 import Login from './pages/Login'
 import Placeholder from './pages/Placeholder'
+import Profile from './pages/Profile'
 import Dashboard from './pages/platform/Dashboard'
 import Tenants from './pages/platform/Tenants'
 import TenantDashboard from './pages/tenant/Dashboard'
@@ -72,8 +73,19 @@ export default function App() {
           </RequireRole>
         }
       />
+      <Route
+        path="/platform/profile"
+        element={
+          <RequireRole role="platform_admin">
+            <AppShell>
+              <Profile />
+            </AppShell>
+          </RequireRole>
+        }
+      />
 
       <Route path="/tenant" element={<TenantPage><TenantDashboard /></TenantPage>} />
+      <Route path="/tenant/profile" element={<TenantPage><Profile /></TenantPage>} />
       <Route path="/tenant/setup" element={<TenantPage><Setup /></TenantPage>} />
       <Route path="/tenant/events" element={<TenantPage><Events /></TenantPage>} />
       <Route path="/tenant/categories" element={<TenantPage><Categories /></TenantPage>} />

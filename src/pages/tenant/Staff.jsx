@@ -43,7 +43,7 @@ export default function Staff() {
   const [resetDone, setResetDone] = useState(false)
 
   useEffect(() => {
-    document.title = 'Tixelise | Staff'
+    document.title = 'Tixelise | User management'
   }, [])
 
   useEffect(() => {
@@ -167,7 +167,7 @@ export default function Staff() {
 
   return (
     <>
-      <PageHead eyebrow="TEAM" title="Staff" subtitle="POS staff who can sell tickets at your events.">
+      <PageHead eyebrow="TEAM" title="User management" subtitle="POS staff who can sell tickets at your events.">
         <RefreshButton loading={loading} onClick={reload} />
         <Button onClick={() => setCreateOpen(true)}>
           <UserPlus className="h-4 w-4" /> New staff

@@ -4,8 +4,7 @@ import { api } from '@/api'
 import { Alert } from '@/components/ui/alert'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   EmptyRow,
@@ -91,6 +90,8 @@ export default function StaffReport() {
 
   const [events, setEvents] = useState([])
   const [eventFilter, setEventFilter] = useState('all')
+  const [staff, setStaff] = useState([])
+  const [staffFilter, setStaffFilter] = useState('all')
   const [search, setSearch] = useState('')
 
   const [active, setActive] = useState(null)
@@ -116,6 +117,16 @@ export default function StaffReport() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+    fetchAll('/admin/staff/')
+      .then((rows) => !cancelled && setStaff(rows))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (invalidRange) {
       setLoading(false)
       setError('The start date must be on or before the end date.')
@@ -128,6 +139,7 @@ export default function StaffReport() {
 
     const qs = new URLSearchParams({ date_from: range.from, date_to: range.to })
     if (eventFilter !== 'all') qs.set('event', eventFilter)
+    if (staffFilter !== 'all') qs.set('staff', staffFilter)
 
     api
       .get(`/admin/reports/staff/?${qs}`)
@@ -138,15 +150,20 @@ export default function StaffReport() {
     return () => {
       cancelled = true
     }
-  }, [range.from, range.to, eventFilter, reloadToken, invalidRange])
+  }, [range.from, range.to, eventFilter, staffFilter, reloadToken, invalidRange])
+
+  const selectedRow =
+    staffFilter !== 'all'
+      ? (report?.staff || []).find((r) => String(r.staff_id) === staffFilter) || null
+      : active
 
   useEffect(() => {
-    if (!active) return
+    if (!selectedRow) return
     let cancelled = false
     setSalesLoading(true)
     setSalesError('')
     const qs = new URLSearchParams({
-      staff: String(active.staff_id),
+      staff: String(selectedRow.staff_id),
       date_from: range.from,
       date_to: range.to,
       page: String(salesPage),
@@ -160,12 +177,11 @@ export default function StaffReport() {
     return () => {
       cancelled = true
     }
-  }, [active, salesPage, range.from, range.to])
+  }, [selectedRow?.staff_id, salesPage, range.from, range.to])
 
   function openSales(row) {
     setActive(row)
     setSalesPage(1)
-    setSales({ count: 0, results: [] })
     setSalesError('')
   }
 
@@ -186,6 +202,25 @@ export default function StaffReport() {
         <div className="flex flex-wrap items-center gap-2.5">
           <DateField label="From" value={range.from} onChange={(from) => setRange((r) => ({ ...r, from }))} />
           <DateField label="To" value={range.to} onChange={(to) => setRange((r) => ({ ...r, to }))} />
+          <Select
+            value={staffFilter}
+            onValueChange={(value) => {
+              setStaffFilter(value)
+              setSalesPage(1)
+            }}
+          >
+            <SelectTrigger className="w-[210px]">
+              <SelectValue placeholder="All staff" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All staff</SelectItem>
+              {staff.map((member) => (
+                <SelectItem key={member.id} value={String(member.id)}>
+                  {member.staff_code} — {member.display_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <RefreshButton loading={loading} onClick={() => setReloadToken((token) => token + 1)} />
         </div>
       </PageHead>
@@ -197,10 +232,20 @@ export default function StaffReport() {
       )}
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Staff with sales" value={loading || !totals ? '—' : totals.staff_with_sales} icon={Users} />
-        <StatCard label="Transactions" value={loading || !totals ? '—' : totals.transactions} tone="gray" />
-        <StatCard label="Tickets sold" value={loading || !totals ? '—' : totals.tickets} tone="gray" />
-        <StatCard label="Net sales" value={loading || !totals ? '—' : `${currency} ${totals.net}`} tone="amber" />
+        <StatCard
+          label="Staff with sales"
+          value={!totals ? '—' : totals.staff_with_sales}
+          icon={Users}
+          surface="blue"
+        />
+        <StatCard label="Transactions" value={!totals ? '—' : totals.transactions} tone="gray" surface="gray" />
+        <StatCard label="Tickets sold" value={!totals ? '—' : totals.tickets} tone="gray" surface="green" />
+        <StatCard
+          label="Gross sales"
+          value={!totals ? '—' : `${currency} ${totals.gross}`}
+          tone="amber"
+          surface="amber"
+        />
       </div>
 
       {report && !invalidRange ? (
@@ -244,7 +289,6 @@ export default function StaffReport() {
                 <TableHead>Tickets</TableHead>
                 <TableHead>Gross</TableHead>
                 <TableHead>Refunds</TableHead>
-                <TableHead>Net</TableHead>
                 <TableHead>Avg ticket</TableHead>
                 <TableHead>Last sale</TableHead>
                 <TableHead>Actions</TableHead>
@@ -252,10 +296,10 @@ export default function StaffReport() {
             </TableHeader>
             <TableBody>
               {loading && !report ? (
-                <LoadingRow colSpan={10} />
+                <LoadingRow colSpan={9} />
               ) : visible.length === 0 ? (
                 <EmptyRow
-                  colSpan={10}
+                  colSpan={9}
                   message={rows.length === 0 ? 'No staff members yet.' : `No staff match “${search.trim()}”.`}
                 />
               ) : (
@@ -286,9 +330,6 @@ export default function StaffReport() {
                       {currency} {row.gross}
                     </TableCell>
                     <TableCell>{currency} {row.refunds}</TableCell>
-                    <TableCell className="font-semibold text-foreground">
-                      {currency} {row.net}
-                    </TableCell>
                     <TableCell>{row.avg_ticket_value ? `${currency} ${row.avg_ticket_value}` : '—'}</TableCell>
                     <TableCell className="text-[12.5px]">{formatWhen(row.last_sale_at)}</TableCell>
                     <TableCell>
@@ -304,100 +345,99 @@ export default function StaffReport() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!active} onOpenChange={(open) => !open && setActive(null)}>
-        <DialogContent className="w-[min(100%-2rem,860px)]">
-          <DialogHeader>
-            <DialogTitle>
-              Sales — {active?.display_name} ({active?.staff_code})
-            </DialogTitle>
-          </DialogHeader>
-          {active && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3.5 text-sm text-muted-foreground">
-                <span>
-                  {range.from} → {range.to}
-                </span>
-                <span>{active.transactions} transactions</span>
-                <span>{active.tickets} tickets</span>
+      {selectedRow && (
+        <Card className="mt-5">
+          <CardHeader className="flex flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">
+                Sales — {selectedRow.display_name} ({selectedRow.staff_code})
+              </CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {range.from} → {range.to} · {selectedRow.transactions} transactions · {selectedRow.tickets} tickets ·{' '}
                 <span className="font-semibold text-foreground">
-                  Net {currency} {active.net}
+                  Gross {currency} {selectedRow.gross}
                 </span>
-              </div>
-
-              {active.by_event.length > 0 ? (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {active.by_event.map((bucket) => (
-                    <div key={bucket.event_id} className="rounded-md border border-border px-3.5 py-2.5 text-[13px]">
-                      <p className="truncate font-semibold">
-                        {bucket.event_code} — {bucket.event_name}
-                      </p>
-                      <p className="text-muted-foreground">
-                        {bucket.transactions} transactions · {bucket.tickets} tickets · gross {currency} {bucket.gross}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              {salesError && <Alert variant="error">{salesError}</Alert>}
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Reference</TableHead>
-                    <TableHead>Event</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Gross</TableHead>
-                    <TableHead>Refunds</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>When</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {salesLoading ? (
-                    <LoadingRow colSpan={7} />
-                  ) : sales.results.length === 0 ? (
-                    <EmptyRow colSpan={7} message="No sales in this range." />
-                  ) : (
-                    sales.results.map((sale) => (
-                      <TableRow key={sale.id}>
-                        <TableCell className="font-mono text-[12.5px]">{sale.sale_reference}</TableCell>
-                        <TableCell className="font-mono text-[12.5px]">{sale.event_code}</TableCell>
-                        <TableCell className="text-[12.5px]">
-                          {(sale.items || []).map((item) => `${item.category_code} ×${item.quantity}`).join(', ') || '—'}
-                        </TableCell>
-                        <TableCell className="font-semibold">
-                          {sale.currency} {sale.gross_total}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {sale.currency} {sale.refund_total}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={sale.status} />
-                        </TableCell>
-                        <TableCell className="text-[12.5px] text-muted-foreground">{formatWhen(sale.created_at)}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-
-              <Pager
-                page={salesPage}
-                totalPages={salesTotalPages}
-                onPrev={() => setSalesPage((page) => page - 1)}
-                onNext={() => setSalesPage((page) => page + 1)}
-              />
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setActive(null)}>
-                  Close
-                </Button>
-              </DialogFooter>
+              </p>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setActive(null)
+                if (staffFilter !== 'all') setStaffFilter('all')
+              }}
+            >
+              Close
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {selectedRow.by_event.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {selectedRow.by_event.map((bucket) => (
+                  <div key={bucket.event_id} className="rounded-md border border-border px-3.5 py-2.5 text-[13px]">
+                    <p className="truncate font-semibold">
+                      {bucket.event_code} — {bucket.event_name}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {bucket.transactions} transactions · {bucket.tickets} tickets · gross {currency} {bucket.gross}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {salesError && <Alert variant="error">{salesError}</Alert>}
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead>Gross</TableHead>
+                  <TableHead>Refunds</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>When</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {salesLoading ? (
+                  <LoadingRow colSpan={7} />
+                ) : sales.results.length === 0 ? (
+                  <EmptyRow colSpan={7} message="No sales in this range." />
+                ) : (
+                  sales.results.map((sale) => (
+                    <TableRow key={sale.id}>
+                      <TableCell className="font-mono text-[12.5px]">{sale.sale_reference}</TableCell>
+                      <TableCell className="font-mono text-[12.5px]">{sale.event_code}</TableCell>
+                      <TableCell className="text-[12.5px]">
+                        {(sale.items || []).map((item) => `${item.category_code} ×${item.quantity}`).join(', ') || '—'}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {sale.currency} {sale.gross_total}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {sale.currency} {sale.refund_total}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={sale.status} />
+                      </TableCell>
+                      <TableCell className="text-[12.5px] text-muted-foreground">{formatWhen(sale.created_at)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+
+            <Pager
+              page={salesPage}
+              totalPages={salesTotalPages}
+              onPrev={() => setSalesPage((page) => page - 1)}
+              onNext={() => setSalesPage((page) => page + 1)}
+            />
+          </CardContent>
+        </Card>
+      )}
     </>
   )
 }

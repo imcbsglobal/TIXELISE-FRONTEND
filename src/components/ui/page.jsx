@@ -41,14 +41,26 @@ export function SearchInput({ value, onChange, placeholder }) {
   )
 }
 
-export function StatCard({ label, value, icon: Icon, tone = 'green' }) {
+export function StatCard({ label, value, icon: Icon, tone = 'green', surface }) {
   const tones = {
     green: 'bg-[#eaf3ee] text-black',
     amber: 'bg-[#f5f0e6] text-black',
     gray: 'bg-[#f0f0ec] text-black',
   }
+  const surfaces = {
+    green: 'bg-[#eaf3ee]',
+    blue: 'bg-[#e9f1fa]',
+    amber: 'bg-[#f6efe2]',
+    rose: 'bg-[#f9ecf0]',
+    gray: 'bg-[#f0f0ec]',
+  }
   return (
-    <div className="flex items-center gap-3.5 rounded-lg border border-border bg-card px-5 py-5 shadow-sm">
+    <div
+      className={cn(
+        'flex items-center gap-3.5 rounded-lg border-[1.5px] border-border px-5 py-5 shadow-sm',
+        surface ? surfaces[surface] : 'bg-card',
+      )}
+    >
       {Icon ? (
         <span className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-white', tones[tone])}>
           <Icon className="h-[19px] w-[19px]" />

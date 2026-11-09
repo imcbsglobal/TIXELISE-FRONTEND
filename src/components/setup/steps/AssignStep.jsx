@@ -250,7 +250,7 @@ export default function AssignStep({ event, rows, setRows, ticketTypes, onNext, 
         <p className="flex items-start gap-2 rounded-lg bg-muted px-3.5 py-2.5 text-sm text-muted-foreground">
           <Info className="mt-[2px] h-4 w-4 shrink-0" />
           <span>
-            No staff members found yet. Go back a step to create one, or add them from the Staff page.
+            No staff members found yet. Go back a step to create one, or add them from the User management page.
           </span>
         </p>
       ) : null}

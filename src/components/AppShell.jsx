@@ -5,22 +5,31 @@ import {
   CalendarDays,
   ChevronDown,
   ClipboardList,
+  Code2,
   Database,
   LayoutDashboard,
   LogOut,
   Percent,
   Printer,
   Receipt,
-  Rocket,
+  Settings,
   Tags,
   Ticket,
   UserCheck,
+  UserCircle,
   Users,
   Wallet,
 } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { loginRouteForRole, logout } from '../auth'
 import { getSession } from '../session'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 const NAVS = {
@@ -37,32 +46,38 @@ const NAVS = {
     roleLabel: 'Tenant admin',
     items: [
       { to: '/tenant', label: 'Dashboard', icon: LayoutDashboard, end: true },
-      { to: '/tenant/setup', label: 'Setup', icon: Rocket },
-      { to: '/tenant/events', label: 'Events', icon: CalendarDays },
+      { to: '/tenant/events?view=grid', label: 'Events', icon: CalendarDays },
+      {
+        id: 'configuration',
+        to: '/tenant/categories',
+        label: 'Entries',
+        icon: Settings,
+        children: [
+          { to: '/tenant/events', label: 'Event', icon: CalendarDays },
+          { to: '/tenant/categories', label: 'Ticket types', icon: Tags },
+          { to: '/tenant/prices', label: 'Prices', icon: Wallet },
+          { to: '/tenant/assignments', label: 'Assignments', icon: UserCheck },
+        ],
+      },
       {
         id: 'master',
         to: '/tenant/master',
         label: 'Master',
         icon: Database,
         children: [
-          { to: '/tenant/company', label: 'Company', icon: Building2 },
           { to: '/tenant/tax-master', label: 'Tax master', icon: Percent },
-          { to: '/tenant/categories', label: 'Categories', icon: Tags },
-          { to: '/tenant/prices', label: 'Prices', icon: Wallet },
           { to: '/tenant/ticket-print', label: 'Ticket print', icon: Printer },
-          { to: '/tenant/staff', label: 'Staff', icon: Users },
-          { to: '/tenant/assignments', label: 'Assignments', icon: UserCheck },
         ],
       },
       {
         id: 'sales-reports',
         to: '/tenant/sales',
-        label: 'Sales & Reports',
+        label: 'Reports',
         icon: Receipt,
         children: [
-          { to: '/tenant/sales', label: 'Sales', icon: Receipt },
-          { to: '/tenant/reports', label: 'Reports', icon: BarChart3 },
+          { to: '/tenant/reports', label: 'Overview', icon: BarChart3 },
           { to: '/tenant/reports/staff', label: 'Staff report', icon: UserCheck },
+          { to: '/tenant/sales', label: 'Sales', icon: Receipt },
           { to: '/tenant/tickets', label: 'Tickets', icon: Ticket },
           { to: '/tenant/audit', label: 'Audit log', icon: ClipboardList },
         ],
@@ -80,13 +95,13 @@ const TITLES = {
   '/tenant/categories': 'Categories',
   '/tenant/prices': 'Prices',
   '/tenant/ticket-print': 'Ticket print',
-  '/tenant/staff': 'Staff',
+  '/tenant/staff': 'User management',
   '/tenant/assignments': 'Assignments',
   '/tenant/company': 'Company',
   '/tenant/tax-master': 'Tax master',
   '/tenant/sales': 'Sales',
   '/tenant/tickets': 'Tickets',
-  '/tenant/reports': 'Reports',
+  '/tenant/reports': 'Overview',
   '/tenant/reports/staff': 'Staff report',
   '/tenant/audit': 'Audit log',
 }
@@ -94,8 +109,18 @@ const TITLES = {
 export default function AppShell({ children }) {
   const session = getSession()
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const [openGroups, setOpenGroups] = useState({})
+
+  // Match both the path and any query the target declares. This lets the main
+  // Events link (?view=grid) and the Entries > Event link (/tenant/events)
+  // point at the same page without both being highlighted at once.
+  function targetMatches(to, end = false) {
+    const [path, query] = to.split('?')
+    const targetSearch = query ? `?${query}` : ''
+    if (targetSearch !== search) return false
+    return end ? pathname === path : pathname === path || pathname.startsWith(`${path}/`)
+  }
 
   const nav = NAVS[session?.role] || NAVS.platform_admin
 
@@ -103,6 +128,9 @@ export default function AppShell({ children }) {
     await logout()
     navigate(loginRouteForRole(session?.role), { replace: true })
   }
+
+  const isTenant = session?.role === 'tenant_admin'
+  const profilePath = session?.role === 'platform_admin' ? '/platform/profile' : '/tenant/profile'
 
   const initial = (session?.username || '?').charAt(0).toUpperCase()
   // The soft green wash is a dashboard-only treatment; every other page sits on the plain canvas.
@@ -114,11 +142,54 @@ export default function AppShell({ children }) {
         {/* md:self-start is required: the sidebar is a stretched column, and
             without it the logo's auto width is pulled to the full column while
             the height stays fixed, distorting the wordmark. */}
-        <img
-          src="/assets/tixelise-logo-green.png"
-          alt="Tixelise"
-          className="h-7 w-auto shrink-0 md:h-8 md:self-start"
-        />
+        <DropdownMenu>
+          <div className="flex shrink-0 items-center gap-1.5 md:self-start">
+            <img
+              src="/assets/tixelise-logo-green.png"
+              alt="Tixelise"
+              className="h-7 w-auto md:h-8"
+            />
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Open account menu"
+                title="Account menu"
+                className="group grid h-7 w-7 shrink-0 place-items-center rounded-[8px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none data-[state=open]:bg-muted data-[state=open]:text-foreground"
+              >
+                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+              </button>
+            </DropdownMenuTrigger>
+          </div>
+
+          <DropdownMenuContent align="start" className="w-60">
+            {isTenant ? (
+              <>
+                <DropdownMenuItem onSelect={() => navigate('/tenant/staff')}>
+                  <Users className="h-4 w-4 shrink-0 text-muted-foreground" /> User management
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate('/tenant/company')}>
+                  <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" /> Company setup
+                </DropdownMenuItem>
+              </>
+            ) : null}
+            <DropdownMenuItem onSelect={() => navigate(profilePath)}>
+              <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" /> Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleLogout()}>
+              <LogOut className="h-4 w-4 shrink-0 text-muted-foreground" /> Logout
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled className="items-start">
+              <Code2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="flex flex-col leading-tight">
+                <span>Developer option</span>
+                <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">
+                  Not built yet — coming soon
+                </span>
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <p className="hidden px-3 text-[10.5px] font-bold tracking-[0.16em] text-primary md:mb-2.5 md:mt-7 md:block">
           {nav.eyebrow}
@@ -127,10 +198,10 @@ export default function AppShell({ children }) {
         <nav className="flex flex-row gap-1 md:flex-col">
           {nav.items.map((item) => {
             if (item.children) {
-              const childActive = item.children.some((child) => pathname.startsWith(child.to))
+              const childActive = item.children.some((child) => targetMatches(child.to))
               // Nested routes (e.g. /reports/staff) must not also light up their parent.
               const activeChild = item.children
-                .filter((child) => pathname === child.to || pathname.startsWith(`${child.to}/`))
+                .filter((child) => targetMatches(child.to))
                 .sort((a, b) => b.to.length - a.to.length)[0]
               const open = openGroups[item.id] ?? childActive
               return (
@@ -182,7 +253,7 @@ export default function AppShell({ children }) {
             }
 
             const Icon = item.icon
-            const active = item.end ? pathname === item.to : pathname.startsWith(item.to)
+            const active = targetMatches(item.to, item.end)
             return (
               <a
                 key={item.to}

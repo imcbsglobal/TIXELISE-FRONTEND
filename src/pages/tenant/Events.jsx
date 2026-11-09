@@ -1,5 +1,6 @@
 import { LayoutGrid, List, Pencil, Plus, Trash2 } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -24,12 +25,14 @@ import {
 } from '@/components/ui/select'
 import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { uniqueCodeFromName } from '@/lib/setup'
 
 const PAGE_SIZE = 20
 const STATUSES = ['draft', 'active', 'completed', 'cancelled']
 
 const EMPTY_FORM = {
   code: '',
+  codeTouched: false,
   name: '',
   event_type: 'regular',
   description: '',
@@ -64,7 +67,9 @@ export default function Events() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [viewMode, setViewMode] = useState('list')
+  const [searchParams] = useSearchParams()
+  const viewParam = searchParams.get('view')
+  const [viewMode, setViewMode] = useState(viewParam === 'grid' ? 'grid' : 'list')
   const [reloadToken, setReloadToken] = useState(0)
 
   const [busyId, setBusyId] = useState(null)
@@ -86,6 +91,12 @@ export default function Events() {
   useEffect(() => {
     document.title = 'Tixelise | Events'
   }, [])
+
+  // The sidebar's main Events link opens in grid view; the Entries > Event link
+  // keeps the list default. Re-sync whenever that query changes.
+  useEffect(() => {
+    setViewMode(viewParam === 'grid' ? 'grid' : 'list')
+  }, [viewParam])
 
   useEffect(() => {
     let cancelled = false
@@ -110,6 +121,26 @@ export default function Events() {
 
   function reload() {
     setReloadToken((token) => token + 1)
+  }
+
+  function handleFormName(value) {
+    const existingCodes = data.results.map((ev) => ev.code)
+    setForm((current) => {
+      const derived = uniqueCodeFromName(value, existingCodes)
+      return {
+        ...current,
+        name: value,
+        ...(current.codeTouched || !derived ? {} : { code: derived }),
+      }
+    })
+  }
+
+  function handleFormCode(value) {
+    setForm((current) => ({
+      ...current,
+      code: value.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+      codeTouched: true,
+    }))
   }
 
   async function transition(ev, target) {
@@ -261,9 +292,11 @@ export default function Events() {
         subtitle="Create events, set their schedule and move them through their lifecycle."
       >
         <RefreshButton loading={loading} onClick={reload} />
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" /> New event
-        </Button>
+        {viewParam !== 'grid' ? (
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" /> New event
+          </Button>
+        ) : null}
       </PageHead>
 
       {actionError && <Alert variant="error" className="mb-5">{actionError}</Alert>}
@@ -398,7 +431,7 @@ export default function Events() {
       </Card>
 
       <Dialog open={createOpen} onOpenChange={(v) => !v && (setCreateOpen(false), setCreateError(''))}>
-        <DialogContent>
+        <DialogContent className="w-[min(100%-2rem,760px)]">
           <DialogHeader>
             <DialogTitle>New event</DialogTitle>
           </DialogHeader>
@@ -406,19 +439,19 @@ export default function Events() {
             {createError && <Alert variant="error">{createError}</Alert>}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Event code" hint="Alphanumeric, unique — e.g. EV004">
-                <Input
-                  value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
-                  placeholder="EV004"
-                  required
-                />
-              </Field>
               <Field label="Event name">
                 <Input
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => handleFormName(e.target.value)}
                   placeholder="Music Fest 2026"
+                  required
+                />
+              </Field>
+              <Field label="Event code" hint="Generated from the name — edit if you prefer another.">
+                <Input
+                  value={form.code}
+                  onChange={(e) => handleFormCode(e.target.value)}
+                  placeholder="MUSICFEST2026"
                   required
                 />
               </Field>

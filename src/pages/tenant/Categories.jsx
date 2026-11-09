@@ -160,7 +160,7 @@ export default function Categories() {
       >
         <RefreshButton loading={loading} onClick={reload} />
         <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" /> New category
+          <Plus className="h-4 w-4" /> New type
         </Button>
       </PageHead>
 
