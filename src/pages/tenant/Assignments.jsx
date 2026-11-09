@@ -9,7 +9,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { PageHead, RefreshButton, SearchInput } from '@/components/ui/page'
 import { BubblePattern } from '@/components/ui/bubble-pattern'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -33,26 +32,8 @@ async function fetchAll(path) {
 const EMPTY_FORM = {
   staff: '',
   event: '',
-  valid_from: '',
-  valid_until: '',
   restrict_categories: false,
   allowed_category_ids: [],
-}
-
-/** `datetime-local` value -> UTC ISO string, so the server stores the instant the admin picked. */
-function toUtcIso(value) {
-  if (!value) return null
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
-}
-
-/** UTC ISO string -> `datetime-local` value for editing. */
-function toLocalInput(value) {
-  if (!value) return ''
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return ''
-  const pad = (part) => String(part).padStart(2, '0')
-  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
 }
 
 function formatWhen(value) {
@@ -213,8 +194,6 @@ export default function Assignments() {
     setForm({
       staff: String(assignment.staff),
       event: String(assignment.event),
-      valid_from: toLocalInput(assignment.valid_from),
-      valid_until: toLocalInput(assignment.valid_until),
       restrict_categories: !!assignment.restrict_categories,
       allowed_category_ids: assignment.allowed_category_ids || [],
     })
@@ -242,8 +221,6 @@ export default function Assignments() {
     const payload = {
       staff: Number(form.staff),
       event: Number(form.event),
-      valid_from: toUtcIso(form.valid_from),
-      valid_until: toUtcIso(form.valid_until),
       restrict_categories: form.restrict_categories,
       allowed_category_ids: form.restrict_categories ? form.allowed_category_ids : [],
     }
@@ -510,20 +487,6 @@ export default function Assignments() {
                     ))}
                   </SelectContent>
                 </Select>
-              </Field>
-              <Field label="Valid from" hint="Optional">
-                <Input
-                  type="datetime-local"
-                  value={form.valid_from}
-                  onChange={(e) => setForm({ ...form, valid_from: e.target.value })}
-                />
-              </Field>
-              <Field label="Valid until" hint="Optional">
-                <Input
-                  type="datetime-local"
-                  value={form.valid_until}
-                  onChange={(e) => setForm({ ...form, valid_until: e.target.value })}
-                />
               </Field>
             </div>
 

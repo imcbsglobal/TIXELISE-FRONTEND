@@ -282,14 +282,6 @@ export default function AppShell({ children }) {
             <strong className="max-w-[120px] truncate text-sm text-foreground">{session?.username}</strong>
             <small className="text-xs text-muted-foreground">{nav.roleLabel}</small>
           </span>
-          <button
-            className="ml-auto grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-[#00794e]"
-            onClick={handleLogout}
-            aria-label="Log out"
-            title="Log out"
-          >
-            <LogOut className="h-[17px] w-[17px]" />
-          </button>
         </div>
       </aside>
 

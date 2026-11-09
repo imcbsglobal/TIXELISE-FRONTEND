@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, MapPin, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, CalendarDays, EyeOff, MapPin, Pencil, Plus, RotateCcw } from 'lucide-react'
 import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -27,14 +27,7 @@ async function fetchAll(path) {
   return results
 }
 
-function toLocal(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-const EMPTY_FORM = { event: '', category: '', amount: '', currency: 'INR', effective_from: '', effective_to: '' }
+const EMPTY_FORM = { event: '', category: '', amount: '', currency: 'INR' }
 
 export default function Prices() {
   const [page, setPage] = useState(1)
@@ -57,9 +50,13 @@ export default function Prices() {
   const [createError, setCreateError] = useState('')
 
   const [detail, setDetail] = useState(null)
-  const [detailForm, setDetailForm] = useState({ amount: '', currency: '', effective_from: '', effective_to: '' })
+  const [detailForm, setDetailForm] = useState({ amount: '', currency: '' })
   const [detailError, setDetailError] = useState('')
   const [savingDetail, setSavingDetail] = useState(false)
+
+  const [busyId, setBusyId] = useState(null)
+  const [actionError, setActionError] = useState('')
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     document.title = 'Tixelise | Prices'
@@ -139,8 +136,6 @@ export default function Prices() {
         category: Number(form.category),
         amount: Number(form.amount).toFixed(2),
         currency: form.currency.trim().toUpperCase() || 'INR',
-        ...(form.effective_from ? { effective_from: `${form.effective_from}:00` } : {}),
-        ...(form.effective_to ? { effective_to: `${form.effective_to}:00` } : {}),
       })
       setSelectedEvent(form.event)
       setForm(EMPTY_FORM)
@@ -167,8 +162,6 @@ export default function Prices() {
     setDetailForm({
       amount: String(price.amount),
       currency: price.currency,
-      effective_from: toLocal(price.effective_from),
-      effective_to: toLocal(price.effective_to),
     })
   }
 
@@ -180,8 +173,6 @@ export default function Prices() {
       await api.patch(`/admin/prices/${detail.id}/`, {
         amount: Number(detailForm.amount).toFixed(2),
         currency: detailForm.currency.trim().toUpperCase() || 'INR',
-        effective_from: detailForm.effective_from ? `${detailForm.effective_from}:00` : null,
-        effective_to: detailForm.effective_to ? `${detailForm.effective_to}:00` : null,
       })
       reload()
       setDetail(null)
@@ -189,6 +180,26 @@ export default function Prices() {
       setDetailError(err.message)
     } finally {
       setSavingDetail(false)
+    }
+  }
+
+  async function changeStatus(price, status) {
+    setBusyId(price.id)
+    setActionError('')
+    setNotice('')
+    try {
+      await api.post(`/admin/prices/${price.id}/status/`, { status })
+      const label = categoryById[price.category]?.name || price.category_code || 'Price'
+      setNotice(
+        status === 'active'
+          ? `${label} is active again for this event.`
+          : `${label} was deactivated and can no longer be sold for this event.`,
+      )
+      reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -214,6 +225,8 @@ export default function Prices() {
 
       {error && <Alert variant="error" className="mb-5">{error}</Alert>}
       {eventsError && <Alert variant="error" className="mb-5">{eventsError}</Alert>}
+      {actionError && <Alert variant="error" className="mb-5">{actionError}</Alert>}
+      {notice && <Alert variant="success" className="mb-5">{notice}</Alert>}
 
       {!selectedEvent ? (
         <section aria-label="Available events">
@@ -322,9 +335,30 @@ export default function Prices() {
                           <StatusBadge status={p.status} />
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm" onClick={() => openDetail(p)}>
-                            <Pencil className="h-3.5 w-3.5" /> Edit
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => openDetail(p)}>
+                              <Pencil className="h-3.5 w-3.5" /> Edit
+                            </Button>
+                            {p.status === 'active' ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => changeStatus(p, 'inactive')}
+                                disabled={busyId === p.id}
+                              >
+                                <EyeOff className="h-3.5 w-3.5" /> Deactivate
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => changeStatus(p, 'active')}
+                                disabled={busyId === p.id}
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" /> Restore
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     )
@@ -395,12 +429,6 @@ export default function Prices() {
                   placeholder="INR"
                 />
               </Field>
-              <Field label="Effective from" hint="Optional">
-                <Input type="datetime-local" value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} />
-              </Field>
-              <Field label="Effective to" hint="Optional">
-                <Input type="datetime-local" value={form.effective_to} onChange={(e) => setForm({ ...form, effective_to: e.target.value })} />
-              </Field>
             </div>
 
             <DialogFooter>
@@ -446,12 +474,6 @@ export default function Prices() {
                     onChange={(e) => setDetailForm({ ...detailForm, currency: e.target.value.toUpperCase() })}
                     required
                   />
-                </Field>
-                <Field label="Effective from">
-                  <Input type="datetime-local" value={detailForm.effective_from} onChange={(e) => setDetailForm({ ...detailForm, effective_from: e.target.value })} />
-                </Field>
-                <Field label="Effective to">
-                  <Input type="datetime-local" value={detailForm.effective_to} onChange={(e) => setDetailForm({ ...detailForm, effective_to: e.target.value })} />
                 </Field>
               </div>
 

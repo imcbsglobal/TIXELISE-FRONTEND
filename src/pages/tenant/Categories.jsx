@@ -14,6 +14,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 const PAGE_SIZE = 20
 const EMPTY_FORM = { code: '', name: '', description: '' }
+const MAX_CODE_LENGTH = 32
+
+// Category codes are upper-case and unique per tenant; derive a stable one from
+// the display name ("General Admission" -> "GENERAL_ADMISSION") so the user only
+// has to type a name. The field stays editable.
+function codeFromName(name) {
+  return name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, MAX_CODE_LENGTH)
+}
 
 export default function Categories() {
   const [page, setPage] = useState(1)
@@ -25,6 +38,7 @@ export default function Categories() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [codeTouched, setCodeTouched] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -116,6 +130,7 @@ export default function Categories() {
         description: form.description.trim(),
       })
       setForm(EMPTY_FORM)
+      setCodeTouched(false)
       setCreateOpen(false)
       setPage(1)
       reload()
@@ -159,7 +174,14 @@ export default function Categories() {
         subtitle="Define ticket categories such as Adult, Child or VIP."
       >
         <RefreshButton loading={loading} onClick={reload} />
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button
+          onClick={() => {
+            setForm(EMPTY_FORM)
+            setCodeTouched(false)
+            setCreateError('')
+            setCreateOpen(true)
+          }}
+        >
           <Plus className="h-4 w-4" /> New type
         </Button>
       </PageHead>
@@ -255,16 +277,35 @@ export default function Categories() {
           <form onSubmit={handleCreate} className="space-y-4">
             {createError && <Alert variant="error">{createError}</Alert>}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Category code" hint="Unique within your organization — e.g. ADULT">
+              <Field label="Display name">
                 <Input
-                  value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                  placeholder="ADULT"
+                  value={form.name}
+                  onChange={(e) => {
+                    const name = e.target.value
+                    setForm({
+                      ...form,
+                      name,
+                      ...(codeTouched ? {} : { code: codeFromName(name) }),
+                    })
+                  }}
+                  placeholder="Adult"
                   required
                 />
               </Field>
-              <Field label="Display name">
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Adult" required />
+              <Field
+                label="Category code"
+                hint="Auto-filled from the name — editable. Unique within your organization."
+              >
+                <Input
+                  value={form.code}
+                  onChange={(e) => {
+                    const code = e.target.value.toUpperCase()
+                    setCodeTouched(code.trim() !== '')
+                    setForm({ ...form, code })
+                  }}
+                  placeholder="ADULT"
+                  required
+                />
               </Field>
             </div>
             <Field label="Description" hint="Optional">

@@ -1,4 +1,4 @@
-import { KeyRound, Pencil, UserPlus } from 'lucide-react'
+import { KeyRound, Pencil, Trash2, UserCheck, UserPlus } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { api } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,9 @@ export default function Staff() {
 
   const [busyId, setBusyId] = useState(null)
   const [actionError, setActionError] = useState('')
+
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -80,6 +83,34 @@ export default function Staff() {
       setActionError(err.message)
     } finally {
       setBusyId(null)
+    }
+  }
+
+  async function activate(staff) {
+    setBusyId(staff.id)
+    setActionError('')
+    try {
+      await api.post(`/admin/staff/${staff.id}/activate/`)
+      reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    setActionError('')
+    try {
+      await api.delete(`/admin/staff/${pendingDelete.id}/`)
+      setPendingDelete(null)
+      reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -219,11 +250,26 @@ export default function Staff() {
                         <Button variant="outline" size="sm" onClick={() => openReset(s)}>
                           <KeyRound className="h-3.5 w-3.5" /> Password
                         </Button>
-                        {s.status === 'active' && (
+                        {s.status === 'active' ? (
                           <Button variant="destructive" size="sm" disabled={busyId === s.id} onClick={() => deactivate(s)}>
                             Deactivate
                           </Button>
+                        ) : (
+                          <Button variant="outline" size="sm" disabled={busyId === s.id} onClick={() => activate(s)}>
+                            <UserCheck className="h-3.5 w-3.5" /> Reactivate
+                          </Button>
                         )}
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={busyId === s.id}
+                          onClick={() => {
+                            setActionError('')
+                            setPendingDelete(s)
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -416,6 +462,47 @@ export default function Staff() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!pendingDelete}
+        onOpenChange={(v) => {
+          if (!v && !deleting) {
+            setPendingDelete(null)
+            setActionError('')
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Permanently delete {pendingDelete?.staff_code}?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {actionError && <Alert variant="error">{actionError}</Alert>}
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{pendingDelete?.display_name}</span> and their POS
+              login will be removed permanently. This cannot be undone.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Staff who have already sold tickets are refused — use{' '}
+              <span className="font-medium text-foreground">Deactivate</span> for them instead, so the sales
+              history stays intact.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingDelete(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmDelete} disabled={deleting}>
+              <Trash2 className="h-4 w-4" /> {deleting ? 'Deleting…' : 'Delete permanently'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

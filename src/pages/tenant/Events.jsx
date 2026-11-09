@@ -188,6 +188,8 @@ export default function Events() {
         code: form.code.trim().toUpperCase(),
         name: form.name.trim(),
         event_type: form.event_type,
+        // New events go live straight away, so no separate Activate step.
+        status: 'active',
         description: form.description.trim(),
         venue: form.venue.trim(),
         address: form.address.trim(),
