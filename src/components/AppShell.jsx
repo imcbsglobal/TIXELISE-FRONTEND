@@ -15,8 +15,8 @@ import {
   Settings,
   Tags,
   Ticket,
+  TicketPlus,
   UserCheck,
-  UserCircle,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -60,16 +60,6 @@ const NAVS = {
         ],
       },
       {
-        id: 'master',
-        to: '/tenant/master',
-        label: 'Master',
-        icon: Database,
-        children: [
-          { to: '/tenant/tax-master', label: 'Tax master', icon: Percent },
-          { to: '/tenant/ticket-print', label: 'Ticket print', icon: Printer },
-        ],
-      },
-      {
         id: 'sales-reports',
         to: '/tenant/sales',
         label: 'Reports',
@@ -80,6 +70,17 @@ const NAVS = {
           { to: '/tenant/sales', label: 'Sales', icon: Receipt },
           { to: '/tenant/tickets', label: 'Tickets', icon: Ticket },
           { to: '/tenant/audit', label: 'Audit log', icon: ClipboardList },
+        ],
+      },
+      {
+        id: 'master',
+        to: '/tenant/master',
+        label: 'Master',
+        icon: Database,
+        children: [
+          { to: '/tenant/tax-master', label: 'Tax master', icon: Percent },
+          { to: '/tenant/ticket-print', label: 'Ticket print', icon: Printer },
+          { to: '/tenant/manual-tickets', label: 'Manual ticket', icon: TicketPlus },
         ],
       },
     ],
@@ -100,6 +101,7 @@ const TITLES = {
   '/tenant/tax-master': 'Tax master',
   '/tenant/sales': 'Sales',
   '/tenant/tickets': 'Tickets',
+  '/tenant/manual-tickets': 'Manual ticket',
   '/tenant/reports': 'Overview',
   '/tenant/reports/staff': 'Staff report',
   '/tenant/audit': 'Audit log',
@@ -129,7 +131,6 @@ export default function AppShell({ children }) {
   }
 
   const isTenant = session?.role === 'tenant_admin'
-  const profilePath = session?.role === 'platform_admin' ? '/platform/profile' : '/tenant/profile'
 
   const initial = (session?.username || '?').charAt(0).toUpperCase()
   // The soft green wash is a dashboard-only treatment; every other page sits on the plain canvas.
@@ -171,9 +172,6 @@ export default function AppShell({ children }) {
                 </DropdownMenuItem>
               </>
             ) : null}
-            <DropdownMenuItem onSelect={() => navigate(profilePath)}>
-              <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" /> Profile
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => handleLogout()}>
               <LogOut className="h-4 w-4 shrink-0 text-muted-foreground" /> Logout
             </DropdownMenuItem>

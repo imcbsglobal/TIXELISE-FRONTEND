@@ -130,7 +130,6 @@ export default function Staff() {
       setCreated({
         staff_code: res.staff_code,
         username: form.username.trim(),
-        registration: res.central_user_registration || null,
       })
       setForm(EMPTY_FORM)
       setPage(1)
@@ -293,9 +292,6 @@ export default function Staff() {
                 Staff member <strong className="font-mono">{created.staff_code}</strong> can now log in to the POS with
                 username <strong>{created.username}</strong> and the password you set.
               </Alert>
-              {created.registration && created.registration.status !== 'registered' && (
-                <Alert variant="warning">{created.registration.detail}</Alert>
-              )}
               <p className="text-xs text-muted-foreground">The password is never shown again — share it securely.</p>
               <DialogFooter>
                 <Button onClick={closeCreate}>Done</Button>

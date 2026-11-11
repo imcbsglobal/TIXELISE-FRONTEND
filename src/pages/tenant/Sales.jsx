@@ -93,7 +93,7 @@ export default function Sales() {
 
   return (
     <>
-      <PageHead eyebrow="TRANSACTIONS" title="Sales" subtitle="Read-only history of every completed sale at your events.">
+      <PageHead eyebrow="TRANSACTIONS" title="Sales" subtitle="Read-only history of sales and admin-issued ticket batches.">
         <RefreshButton loading={loading} onClick={reload} />
       </PageHead>
 

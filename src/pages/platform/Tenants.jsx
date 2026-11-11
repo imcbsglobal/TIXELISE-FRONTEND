@@ -169,15 +169,9 @@ export default function Tenants() {
     }
     try {
       const tenant = await api.post('/platform/tenants/', payload)
-      const registration = tenant.currency_registration || null
-      const centralUser = tenant.central_user_registration || null
       setCreated({
         code: tenant.code,
         admin: form.admin_username.trim(),
-        currencyWarning:
-          registration && registration.status === 'failed' ? registration.detail : '',
-        centralWarning:
-          centralUser && centralUser.status === 'failed' ? centralUser.detail : '',
       })
       setForm(EMPTY_FORM)
       setPage(1)
@@ -434,19 +428,6 @@ export default function Tenants() {
                 Tenant <strong className="mono">{created.code}</strong> is live. Its admin can log
                 in now with username <strong>{created.admin}</strong> and the password you set.
               </p>
-              {created.currencyWarning && (
-                <p className="alert alert-warning">
-                  The tenant is active, but its currency could not be registered in the central
-                  currency master ({created.currencyWarning}).
-                </p>
-              )}
-              {created.centralWarning && (
-                <p className="alert alert-warning">
-                  The tenant is active, but its admin account could not be registered in the
-                  central user master ({created.centralWarning}). Open the tenant and use
-                  “Register central account” to retry.
-                </p>
-              )}
               <p className="field-hint">The password is never shown again — share it securely.</p>
               <div className="modal-actions">
                 <button className="btn btn-primary" onClick={closeCreate}>Done</button>

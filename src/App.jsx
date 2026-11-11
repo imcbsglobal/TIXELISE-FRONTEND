@@ -5,7 +5,6 @@ import { getSession } from './session'
 import AppShell from './components/AppShell'
 import Login from './pages/Login'
 import Placeholder from './pages/Placeholder'
-import Profile from './pages/Profile'
 import Dashboard from './pages/platform/Dashboard'
 import Tenants from './pages/platform/Tenants'
 import TenantDashboard from './pages/tenant/Dashboard'
@@ -19,6 +18,7 @@ import TaxMaster from './pages/tenant/TaxMaster'
 import TicketPrint from './pages/tenant/TicketPrint'
 import Sales from './pages/tenant/Sales'
 import Tickets from './pages/tenant/Tickets'
+import ManualTickets from './pages/tenant/ManualTickets'
 import Reports from './pages/tenant/Reports'
 import StaffReport from './pages/tenant/StaffReport'
 import Audit from './pages/tenant/Audit'
@@ -72,19 +72,7 @@ export default function App() {
           </RequireRole>
         }
       />
-      <Route
-        path="/platform/profile"
-        element={
-          <RequireRole role="platform_admin">
-            <AppShell>
-              <Profile />
-            </AppShell>
-          </RequireRole>
-        }
-      />
-
       <Route path="/tenant" element={<TenantPage><TenantDashboard /></TenantPage>} />
-      <Route path="/tenant/profile" element={<TenantPage><Profile /></TenantPage>} />
       <Route path="/tenant/events" element={<TenantPage><Events /></TenantPage>} />
       <Route path="/tenant/categories" element={<TenantPage><Categories /></TenantPage>} />
       <Route path="/tenant/prices" element={<TenantPage><Prices /></TenantPage>} />
@@ -95,6 +83,7 @@ export default function App() {
       <Route path="/tenant/ticket-print" element={<TenantPage><TicketPrint /></TenantPage>} />
       <Route path="/tenant/sales" element={<TenantPage><Sales /></TenantPage>} />
       <Route path="/tenant/tickets" element={<TenantPage><Tickets /></TenantPage>} />
+      <Route path="/tenant/manual-tickets" element={<TenantPage><ManualTickets /></TenantPage>} />
       <Route path="/tenant/reports" element={<TenantPage><Reports /></TenantPage>} />
       <Route path="/tenant/reports/staff" element={<TenantPage><StaffReport /></TenantPage>} />
       <Route path="/tenant/audit" element={<TenantPage><Audit /></TenantPage>} />

@@ -52,7 +52,9 @@ export default function Tickets() {
 
   useEffect(() => {
     let cancelled = false
-    fetchAll('/admin/events/').then((evs) => !cancelled && setEvents(evs)).catch(() => {})
+    fetchAll('/admin/events/')
+      .then((eventList) => !cancelled && setEvents(eventList))
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -186,7 +188,14 @@ export default function Tickets() {
               ) : (
                 rows.map((t) => (
                   <TableRow key={t.id}>
-                    <TableCell className="font-mono text-[12.5px]">{t.ticket_code}</TableCell>
+                    <TableCell className="font-mono text-[12.5px]">
+                      {t.ticket_code}
+                      {t.source === 'manual' ? (
+                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                          Comp
+                        </span>
+                      ) : null}
+                    </TableCell>
                     <TableCell className="font-mono text-[13.5px]">{t.event_code}</TableCell>
                     <TableCell className="font-mono text-[13.5px]">{t.staff_code}</TableCell>
                     <TableCell>{t.category_name}</TableCell>

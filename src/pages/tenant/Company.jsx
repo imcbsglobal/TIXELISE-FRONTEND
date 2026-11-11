@@ -130,6 +130,7 @@ function Detail({ label, value }) {
 function CompanyForm({
   clientId,
   licenseKey,
+  customerName,
   countries = [],
   company,
   submitLabel,
@@ -140,9 +141,11 @@ function CompanyForm({
 }) {
   const [form, setForm] = useState(() => {
     const initial = company ? fromCompany(company) : { ...BLANK }
-    // A new company has no licence key of its own, so start from the one this
-    // client was licensed with. Editable, and sent as an ordinary field.
+    // A new company has no licence key or name of its own, so start from what
+    // this client was licensed with. Both stay editable and are sent as
+    // ordinary fields.
     if (!initial.license_key) initial.license_key = licenseKey
+    if (!initial.company_name) initial.company_name = customerName
     return initial
   })
   const [errors, setErrors] = useState({})
@@ -209,16 +212,25 @@ function CompanyForm({
   const countryOptions =
     form.country && !countries.includes(form.country) ? [form.country, ...countries] : countries
 
-  const textField = (key, label, hint) => (
+  const textField = (key, label, hint, readOnly = false) => (
     <Field label={label} hint={hint}>
       <Input
         value={form[key]}
         maxLength={MAX_LENGTHS[key]}
+        readOnly={readOnly}
+        tabIndex={readOnly ? -1 : undefined}
+        className={readOnly ? 'cursor-default' : undefined}
         onChange={(event) => setField(key, event.target.value)}
       />
       {errors[key] ? <p className="mt-1 text-xs font-semibold text-destructive">{errors[key]}</p> : null}
     </Field>
   )
+
+  // Values that come from the licence lookup are shown but not edited; a blank
+  // one (lookup unavailable) stays editable so the administrator can fill it.
+  const isNew = !company
+  const lockCompanyName = isNew && !!customerName
+  const lockLicenseKey = isNew && !!licenseKey
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -228,8 +240,8 @@ function CompanyForm({
         <Field label="Client ID" className="sm:col-span-2">
           <Input value={clientId} readOnly tabIndex={-1} className="font-mono cursor-default" />
         </Field>
-        {textField('company_name', 'Company name')}
-        {textField('license_key', 'License key')}
+        {textField('company_name', 'Company name', undefined, lockCompanyName)}
+        {textField('license_key', 'License key', undefined, lockLicenseKey)}
         {textField('gst_number', 'GST number')}
         {textField('pan_number', 'PAN number')}
         {textField('email', 'Email')}
@@ -291,6 +303,7 @@ function CompanyForm({
 export default function Company() {
   const [clientId, setClientId] = useState('')
   const [licenseKey, setLicenseKey] = useState('')
+  const [customerName, setCustomerName] = useState('')
   const [countries, setCountries] = useState([])
   const [company, setCompany] = useState(null)
   const [extra, setExtra] = useState(0)
@@ -319,6 +332,7 @@ export default function Company() {
         const rows = Array.isArray(res?.results) ? res.results : []
         setClientId(res?.client_id || '')
         setLicenseKey(res?.license_key || '')
+        setCustomerName(res?.customer_name || '')
         setCountries(Array.isArray(res?.countries) ? res.countries : [])
         setCompany(rows[0] || null)
         setExtra(Math.max(0, rows.length - 1))
@@ -408,6 +422,7 @@ export default function Company() {
                 key={company?.id ?? 'new'}
                 clientId={clientId}
                 licenseKey={licenseKey}
+                customerName={customerName}
                 countries={countries}
                 company={editing ? company : null}
                 submitLabel={company ? 'Save changes' : 'Create company'}
