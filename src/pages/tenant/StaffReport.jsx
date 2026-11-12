@@ -241,16 +241,17 @@ export default function StaffReport() {
         <StatCard label="Transactions" value={!totals ? '—' : totals.transactions} tone="gray" surface="gray" />
         <StatCard label="Tickets sold" value={!totals ? '—' : totals.tickets} tone="gray" surface="green" />
         <StatCard
-          label="Gross sales"
-          value={!totals ? '—' : `${currency} ${totals.gross}`}
-          tone="amber"
-          surface="amber"
+          label="Total collected"
+          value={!totals ? '—' : `${currency} ${totals.total}`}
+          tone="gray"
+          surface="green"
         />
       </div>
 
       {report && !invalidRange ? (
         <p className="mb-5 text-sm text-muted-foreground">
-          {report.date_from} → {report.date_to} · {report.timezone} · Gross {currency} {report.totals.gross} · Refunds{' '}
+          {report.date_from} → {report.date_to} · {report.timezone} · Gross {currency} {report.totals.gross} · Tax{' '}
+          {currency} {report.totals.tax} · Total {currency} {report.totals.total} · Refunds{' '}
           {currency} {report.totals.refunds}
         </p>
       ) : null}
@@ -288,6 +289,8 @@ export default function StaffReport() {
                 <TableHead>Transactions</TableHead>
                 <TableHead>Tickets</TableHead>
                 <TableHead>Gross</TableHead>
+                <TableHead>Tax</TableHead>
+                <TableHead>Total</TableHead>
                 <TableHead>Refunds</TableHead>
                 <TableHead>Avg ticket</TableHead>
                 <TableHead>Last sale</TableHead>
@@ -296,10 +299,10 @@ export default function StaffReport() {
             </TableHeader>
             <TableBody>
               {loading && !report ? (
-                <LoadingRow colSpan={9} />
+                <LoadingRow colSpan={11} />
               ) : visible.length === 0 ? (
                 <EmptyRow
-                  colSpan={9}
+                  colSpan={11}
                   message={rows.length === 0 ? 'No staff members yet.' : `No staff match “${search.trim()}”.`}
                 />
               ) : (
@@ -329,6 +332,8 @@ export default function StaffReport() {
                     <TableCell className="font-semibold">
                       {currency} {row.gross}
                     </TableCell>
+                    <TableCell className="text-muted-foreground">{currency} {row.tax}</TableCell>
+                    <TableCell className="font-semibold">{currency} {row.total}</TableCell>
                     <TableCell>{currency} {row.refunds}</TableCell>
                     <TableCell>{row.avg_ticket_value ? `${currency} ${row.avg_ticket_value}` : '—'}</TableCell>
                     <TableCell className="text-[12.5px]">{formatWhen(row.last_sale_at)}</TableCell>
@@ -395,6 +400,8 @@ export default function StaffReport() {
                   <TableHead>Event</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Gross</TableHead>
+                  <TableHead>Tax</TableHead>
+                  <TableHead>Total</TableHead>
                   <TableHead>Refunds</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>When</TableHead>
@@ -402,9 +409,9 @@ export default function StaffReport() {
               </TableHeader>
               <TableBody>
                 {salesLoading ? (
-                  <LoadingRow colSpan={7} />
+                  <LoadingRow colSpan={9} />
                 ) : sales.results.length === 0 ? (
-                  <EmptyRow colSpan={7} message="No sales in this range." />
+                  <EmptyRow colSpan={9} message="No sales in this range." />
                 ) : (
                   sales.results.map((sale) => (
                     <TableRow key={sale.id}>
@@ -415,6 +422,12 @@ export default function StaffReport() {
                       </TableCell>
                       <TableCell className="font-semibold">
                         {sale.currency} {sale.gross_total}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {sale.currency} {sale.tax_total}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {sale.currency} {sale.total_payable}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {sale.currency} {sale.refund_total}

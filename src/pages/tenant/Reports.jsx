@@ -54,6 +54,8 @@ function Breakdown({ title, rows, codeKey, idKey, label, showAmount = false }) {
                 <TableHead>{label}</TableHead>
                 <TableHead>Tickets</TableHead>
                 {showAmount ? <TableHead>Amount</TableHead> : null}
+                {showAmount ? <TableHead>Tax</TableHead> : null}
+                {showAmount ? <TableHead>Total</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -63,6 +65,12 @@ function Breakdown({ title, rows, codeKey, idKey, label, showAmount = false }) {
                   <TableCell className="font-semibold">{r.tickets}</TableCell>
                   {showAmount ? (
                     <TableCell className="font-semibold">{r.amount ?? '—'}</TableCell>
+                  ) : null}
+                  {showAmount ? (
+                    <TableCell className="text-muted-foreground">{r.tax ?? '—'}</TableCell>
+                  ) : null}
+                  {showAmount ? (
+                    <TableCell className="font-semibold">{r.total ?? '—'}</TableCell>
                   ) : null}
                 </TableRow>
               ))}
@@ -130,7 +138,7 @@ export default function Reports() {
         <StatCard label="Tickets sold" value={loading || !report ? '—' : report.tickets_sold} surface="blue" />
         <StatCard label="Transactions" value={loading || !report ? '—' : report.transactions} surface="gray" />
         <StatCard label="Gross sales" value={loading || !report ? '—' : report.gross_sales} surface="green" />
-        <StatCard label="Today sales" value={loading || !report ? '—' : report.sales_today} tone="amber" surface="amber" />
+        <StatCard label="Total collected" value={loading || !report ? '—' : report.total_sales} surface="green" />
       </div>
 
       {report && !invalidRange && (

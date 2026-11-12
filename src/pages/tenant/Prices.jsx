@@ -29,6 +29,18 @@ async function fetchAll(path) {
 
 const EMPTY_FORM = { event: '', category: '', amount: '', currency: 'INR' }
 
+// Preview of what a ticket will actually cost once tax is applied. The backend
+// owns the arithmetic; this only mirrors it for the table and the edit dialog.
+function taxPreview(amount, setting) {
+  const value = Number(amount)
+  const rate = Number(setting?.rate || 0)
+  if (!setting?.enabled || !Number.isFinite(value) || rate <= 0) return null
+  if (setting.prices_include_tax) {
+    return { rate, gross: value, tax: value - value / (1 + rate / 100) }
+  }
+  return { rate, gross: value, tax: (value * rate) / 100 }
+}
+
 export default function Prices() {
   const [page, setPage] = useState(1)
   const [data, setData] = useState({ count: 0, results: [] })
@@ -43,6 +55,7 @@ export default function Prices() {
 
   const [events, setEvents] = useState([])
   const [categories, setCategories] = useState([])
+  const [taxSetting, setTaxSetting] = useState(null)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -66,11 +79,16 @@ export default function Prices() {
     let cancelled = false
     setEventsLoading(true)
     setEventsError('')
-    Promise.all([fetchAll('/admin/events/'), fetchAll('/admin/categories/')])
-      .then(([evs, cats]) => {
+    Promise.all([
+      fetchAll('/admin/events/'),
+      fetchAll('/admin/categories/'),
+      api.get('/admin/tax-settings/').catch(() => null),
+    ])
+      .then(([evs, cats, applied]) => {
         if (cancelled) return
         setEvents(evs)
         setCategories(cats)
+        setTaxSetting(applied)
       })
       .catch((err) => {
         if (!cancelled) setEventsError(err.message)
@@ -303,6 +321,7 @@ export default function Prices() {
                   <TableHead>Event</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Amount</TableHead>
+                  <TableHead>With tax</TableHead>
                   <TableHead>Currency</TableHead>
                   <TableHead>Effective from</TableHead>
                   <TableHead>Effective to</TableHead>
@@ -312,18 +331,24 @@ export default function Prices() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <LoadingRow colSpan={8} />
+                  <LoadingRow colSpan={9} />
                 ) : rows.length === 0 ? (
-                  <EmptyRow colSpan={8} message="No prices found for this event." />
+                  <EmptyRow colSpan={9} message="No prices found for this event." />
                 ) : (
                   rows.map((p) => {
                     const ev = eventById[p.event]
                     const cat = categoryById[p.category]
+                    const taxed = taxPreview(p.amount, taxSetting)
                     return (
                       <TableRow key={p.id}>
                         <TableCell className="font-mono text-[13.5px]">{ev ? ev.code : p.event}</TableCell>
                         <TableCell className="font-mono text-[13.5px]">{cat?.name || p.category_code || '—'}</TableCell>
                         <TableCell className="font-semibold">{p.amount}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {taxed
+                            ? `${(taxed.gross + (taxSetting.prices_include_tax ? 0 : taxed.tax)).toFixed(2)} · ${taxed.rate}%`
+                            : '—'}
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{p.currency}</TableCell>
                         <TableCell className="text-muted-foreground">
                           {p.effective_from ? new Date(p.effective_from).toLocaleString() : '—'}
@@ -476,6 +501,25 @@ export default function Prices() {
                   />
                 </Field>
               </div>
+
+              {taxPreview(detailForm.amount, taxSetting) ? (
+                <p className="rounded-md border border-border px-3.5 py-2.5 text-xs text-muted-foreground">
+                  {taxSetting.prices_include_tax ? 'Includes' : 'Plus'}{' '}
+                  <span className="font-semibold text-foreground">
+                    {taxPreview(detailForm.amount, taxSetting).tax.toFixed(2)}
+                  </span>{' '}
+                  tax ({taxSetting.code} {taxSetting.rate}%). A ticket costs{' '}
+                  <span className="font-semibold text-foreground">
+                    {(
+                      taxPreview(detailForm.amount, taxSetting).gross +
+                      (taxSetting.prices_include_tax
+                        ? 0
+                        : taxPreview(detailForm.amount, taxSetting).tax)
+                    ).toFixed(2)}
+                  </span>
+                  .
+                </p>
+              ) : null}
 
               <p className="text-xs text-muted-foreground">
                 Past sales keep their original price — edits only affect future sales.

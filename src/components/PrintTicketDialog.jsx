@@ -63,6 +63,22 @@ export default function PrintTicketDialog({ ticketId, open, onOpenChange }) {
               Seq #{ticket.sequence_number} · {ticket.issued_at_local}
             </p>
 
+            {ticket.unit_price ? (
+              <div className="mt-2.5 space-y-0.5 text-[11.5px]">
+                <p>
+                  {ticket.currency} {ticket.unit_price} × {ticket.quantity}
+                </p>
+                {Number(ticket.tax_rate) > 0 ? (
+                  <p className="text-muted-foreground">
+                    Tax {ticket.tax_code || ''} {ticket.tax_rate}%: {ticket.tax_amount}
+                  </p>
+                ) : null}
+                <p className="font-bold">
+                  Total {ticket.currency} {ticket.total}
+                </p>
+              </div>
+            ) : null}
+
             <div className="my-2.5 border-t border-dashed" />
             {print.footer ? <p className="text-[11.5px] font-semibold">{print.footer}</p> : null}
           </div>

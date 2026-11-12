@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, DollarSign, Receipt, Tags, Ticket, Users } from 'lucide-react'
+import { ArrowRight, CalendarDays, Receipt, Tags, Ticket, Users } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '@/api'
@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 const STAT_META = [
   { key: 'tickets_sold_today', label: 'Tickets sold today', icon: Ticket, tone: 'green' },
-  { key: 'gross_sales_today', label: 'Gross sales today', icon: DollarSign, tone: 'green' },
+  { key: 'total_sales_today', label: 'Total collected today', icon: Receipt, tone: 'green' },
   { key: 'completed_sales_today', label: 'Transactions today', icon: Receipt, tone: 'gray' },
   { key: 'active_events', label: 'Active events', icon: CalendarDays, tone: 'amber' },
   { key: 'active_ticket_types', label: 'Active ticket types', icon: Tags, tone: 'green' },
@@ -107,7 +107,7 @@ export default function Dashboard() {
                     <TableCell>{s.event_name}</TableCell>
                     <TableCell className="font-mono text-[13.5px]">{s.staff_code}</TableCell>
                     <TableCell>
-                      {s.currency} {s.gross_total}
+                      {s.currency} {s.total_payable}
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={s.status} />

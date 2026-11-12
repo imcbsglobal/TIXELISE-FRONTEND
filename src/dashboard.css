@@ -3,28 +3,42 @@
    (same tokens: --green, --ink, --field; DM Sans / Plus Jakarta)
    ============================================================ */
 
+/* ---------- shell scale ----------
+   The shell is a laptop-tuned layout drawn at 75% so it fills the screen, and
+   its own box is then enlarged by the reciprocal so it stays flush with the
+   edges. That factor used to be a constant, which is exactly why the page
+   looked no bigger on a 27" monitor than on a 15" laptop. It now steps up with
+   the viewport, and every box that must reach the edge reads the same two
+   variables: --shell-scale for the transform, --shell-inv for the enlarged
+   width and height. They always move together.
+   Below 820px nothing is scaled at all (see the mobile block at the end). */
+:root { --shell-scale: .75; --shell-inv: 1.3333333; }
+@media (min-width: 1700px) { :root { --shell-scale: .82; --shell-inv: 1.2195122; } }
+@media (min-width: 1920px) { :root { --shell-scale: .9;  --shell-inv: 1.1111111; } }
+@media (min-width: 2400px) { :root { --shell-scale: 1.05; --shell-inv: .9523810; } }
+@media (min-width: 3000px) { :root { --shell-scale: 1.25; --shell-inv: .8; } }
+@media (min-width: 3600px) { :root { --shell-scale: 1.45; --shell-inv: .6896552; } }
+
 .dashboard-density {
   display: grid;
   grid-template-columns: 256px minmax(0, 1fr) !important;
-  /* Dashboard-only density: visually equivalent to browser zoom at 75%,
-     while the expanded dimensions keep it flush with the viewport. */
   zoom: 1;
-  transform: scale(.75);
+  transform: scale(var(--shell-scale));
   transform-origin: top left;
   position: fixed;
   inset: 0 auto auto 0;
-  width: 133.333333%;
-  height: 133.333333vh;
+  width: calc(100% * var(--shell-inv));
+  height: calc(100vh * var(--shell-inv));
   min-height: 0;
 }
 
-.dashboard-density > aside { height: 133.333333vh; }
+.dashboard-density > aside { height: calc(100vh * var(--shell-inv)); }
 .dashboard-density > * { min-width: 0; }
-.dashboard-main { height: 133.333333vh; min-height: 0 !important; overflow-y: auto; overflow-x: hidden; }
+.dashboard-main { height: calc(100vh * var(--shell-inv)); min-height: 0 !important; overflow-y: auto; overflow-x: hidden; }
 
 /* ---------- sidebar ---------- */
 .sidebar {
-  position: sticky; top: 0; height: 133.333333vh;
+  position: sticky; top: 0; height: calc(100vh * var(--shell-inv));
   display: flex; flex-direction: column;
   padding: 30px 20px 22px;
   background: #fff; border-right: 1px solid #e6ebeb;

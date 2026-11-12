@@ -27,7 +27,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -170,20 +169,15 @@ export default function AppShell({ children }) {
                 <DropdownMenuItem onSelect={() => navigate('/tenant/company')}>
                   <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" /> Company setup
                 </DropdownMenuItem>
+                {/* Tenant-only, and deliberately last: emptying an organization's
+                    history is a development tool, not day-to-day work. */}
+                <DropdownMenuItem onSelect={() => navigate('/tenant/developer')}>
+                  <Code2 className="h-4 w-4 shrink-0 text-muted-foreground" /> Developer option
+                </DropdownMenuItem>
               </>
             ) : null}
             <DropdownMenuItem onSelect={() => handleLogout()}>
               <LogOut className="h-4 w-4 shrink-0 text-muted-foreground" /> Logout
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem disabled className="items-start">
-              <Code2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="flex flex-col leading-tight">
-                <span>Developer option</span>
-                <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">
-                  Not built yet — coming soon
-                </span>
-              </span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

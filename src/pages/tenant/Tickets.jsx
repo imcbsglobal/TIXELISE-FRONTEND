@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui/badge'
 import { Alert } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
+import { DateField, EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import PrintTicketDialog from '@/components/PrintTicketDialog'
 
@@ -34,6 +34,8 @@ export default function Tickets() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [eventFilter, setEventFilter] = useState('all')
+  // Empty means "no bound on that side" - one date alone is a valid filter.
+  const [range, setRange] = useState({ from: '', to: '' })
   const [reloadToken, setReloadToken] = useState(0)
 
   const [events, setEvents] = useState([])
@@ -67,6 +69,8 @@ export default function Tickets() {
     const qs = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) })
     if (statusFilter !== 'all') qs.set('status', statusFilter)
     if (eventFilter !== 'all') qs.set('event', eventFilter)
+    if (range.from) qs.set('date_from', range.from)
+    if (range.to) qs.set('date_to', range.to)
     api
       .get(`/admin/tickets/?${qs}`)
       .then((res) => !cancelled && setData(res))
@@ -75,7 +79,7 @@ export default function Tickets() {
     return () => {
       cancelled = true
     }
-  }, [page, statusFilter, eventFilter, reloadToken])
+  }, [page, statusFilter, eventFilter, range.from, range.to, reloadToken])
 
   const totalPages = Math.max(1, Math.ceil(data.count / PAGE_SIZE))
   const rows = data.results.filter((t) =>
@@ -84,6 +88,11 @@ export default function Tickets() {
 
   function reload() {
     setReloadToken((token) => token + 1)
+  }
+
+  function setRangeField(key, value) {
+    setRange((current) => ({ ...current, [key]: value }))
+    setPage(1)
   }
 
   async function openDetail(ticket) {
@@ -113,6 +122,20 @@ export default function Tickets() {
   return (
     <>
       <PageHead eyebrow="ISSUED TICKETS" title="Tickets" subtitle="Every ticket issued by your staff, with reprint history.">
+        <DateField label="From" value={range.from} onChange={(value) => setRangeField('from', value)} />
+        <DateField label="To" value={range.to} onChange={(value) => setRangeField('to', value)} />
+        {range.from || range.to ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setRange({ from: '', to: '' })
+              setPage(1)
+            }}
+          >
+            Clear
+          </Button>
+        ) : null}
         <RefreshButton loading={loading} onClick={reload} />
       </PageHead>
 

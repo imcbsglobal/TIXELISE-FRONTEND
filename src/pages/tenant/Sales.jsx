@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui/badge'
 import { Alert } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
+import { DateField, EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const PAGE_SIZE = 20
@@ -33,6 +33,8 @@ export default function Sales() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [eventFilter, setEventFilter] = useState('all')
+  // Empty means "no bound on that side" - one date alone is a valid filter.
+  const [range, setRange] = useState({ from: '', to: '' })
   const [reloadToken, setReloadToken] = useState(0)
 
   const [events, setEvents] = useState([])
@@ -59,6 +61,8 @@ export default function Sales() {
     const qs = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) })
     if (statusFilter !== 'all') qs.set('status', statusFilter)
     if (eventFilter !== 'all') qs.set('event', eventFilter)
+    if (range.from) qs.set('date_from', range.from)
+    if (range.to) qs.set('date_to', range.to)
     api
       .get(`/admin/sales/?${qs}`)
       .then((res) => !cancelled && setData(res))
@@ -67,7 +71,7 @@ export default function Sales() {
     return () => {
       cancelled = true
     }
-  }, [page, statusFilter, eventFilter, reloadToken])
+  }, [page, statusFilter, eventFilter, range.from, range.to, reloadToken])
 
   const totalPages = Math.max(1, Math.ceil(data.count / PAGE_SIZE))
   const rows = data.results.filter((s) =>
@@ -76,6 +80,11 @@ export default function Sales() {
 
   function reload() {
     setReloadToken((token) => token + 1)
+  }
+
+  function setRangeField(key, value) {
+    setRange((current) => ({ ...current, [key]: value }))
+    setPage(1)
   }
 
   async function openDetail(sale) {
@@ -94,6 +103,20 @@ export default function Sales() {
   return (
     <>
       <PageHead eyebrow="TRANSACTIONS" title="Sales" subtitle="Read-only history of sales and admin-issued ticket batches.">
+        <DateField label="From" value={range.from} onChange={(value) => setRangeField('from', value)} />
+        <DateField label="To" value={range.to} onChange={(value) => setRangeField('to', value)} />
+        {range.from || range.to ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setRange({ from: '', to: '' })
+              setPage(1)
+            }}
+          >
+            Clear
+          </Button>
+        ) : null}
         <RefreshButton loading={loading} onClick={reload} />
       </PageHead>
 
@@ -154,6 +177,8 @@ export default function Sales() {
                 <TableHead>Staff</TableHead>
                 <TableHead>Items</TableHead>
                 <TableHead>Gross</TableHead>
+                <TableHead>Tax</TableHead>
+                <TableHead>Total</TableHead>
                 <TableHead>Refunds</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
@@ -162,9 +187,9 @@ export default function Sales() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <LoadingRow colSpan={9} />
+                <LoadingRow colSpan={11} />
               ) : rows.length === 0 ? (
-                <EmptyRow colSpan={9} message="No sales found." />
+                <EmptyRow colSpan={11} message="No sales found." />
               ) : (
                 rows.map((s) => (
                   <TableRow key={s.id}>
@@ -174,6 +199,12 @@ export default function Sales() {
                     <TableCell>{(s.items || []).reduce((n, i) => n + i.quantity, 0)}</TableCell>
                     <TableCell className="font-semibold">
                       {s.currency} {s.gross_total}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {s.currency} {s.tax_total}
+                    </TableCell>
+                    <TableCell className="font-semibold">
+                      {s.currency} {s.total_payable}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {s.currency} {s.refund_total}
@@ -225,6 +256,7 @@ export default function Sales() {
                       <TableHead>Qty</TableHead>
                       <TableHead>Unit price</TableHead>
                       <TableHead>Line total</TableHead>
+                      <TableHead>Tax</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -237,6 +269,10 @@ export default function Sales() {
                         </TableCell>
                         <TableCell className="font-semibold">
                           {detail.currency} {i.line_total}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {detail.currency} {i.tax_amount}
+                          {Number(i.tax_rate_snapshot) ? ` (${i.tax_rate_snapshot}%)` : ''}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -279,6 +315,12 @@ export default function Sales() {
               <div className="flex flex-wrap items-center gap-3.5 border-t border-border pt-4 text-sm text-muted-foreground">
                 <span>
                   Gross {detail.currency} {detail.gross_total}
+                </span>
+                <span>
+                  Tax {detail.currency} {detail.tax_total}
+                </span>
+                <span className="font-semibold text-foreground">
+                  Total {detail.currency} {detail.total_payable}
                 </span>
                 <span>
                   Refunds {detail.currency} {detail.refund_total}

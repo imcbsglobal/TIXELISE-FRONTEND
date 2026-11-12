@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { RefreshCw, Search } from 'lucide-react'
+import { CalendarDays, RefreshCw, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -23,6 +23,23 @@ export function RefreshButton({ loading, onClick }) {
     <Button variant="outline" size="icon" onClick={onClick} aria-label="Refresh" title="Refresh">
       <RefreshCw className={cn('h-[17px] w-[17px]', loading && 'animate-spin')} />
     </Button>
+  )
+}
+
+// A single day, used as a filter bound. Native input keeps the picker familiar
+// and needs no date library.
+export function DateField({ label, value, onChange }) {
+  return (
+    <label className="flex h-11 items-center gap-2 rounded-md border border-input bg-background px-3.5 text-muted-foreground">
+      <CalendarDays className="h-[16px] w-[16px] shrink-0" />
+      <span className="text-[10.5px] font-bold uppercase tracking-[0.1em]">{label}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="border-0 bg-transparent text-[13.5px] text-foreground outline-none"
+      />
+    </label>
   )
 }
 
