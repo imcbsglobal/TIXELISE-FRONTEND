@@ -12,6 +12,7 @@ import Events from './pages/tenant/Events'
 import Categories from './pages/tenant/Categories'
 import Prices from './pages/tenant/Prices'
 import Staff from './pages/tenant/Staff'
+import Agents from './pages/tenant/Agents'
 import Assignments from './pages/tenant/Assignments'
 import Company from './pages/tenant/Company'
 import TaxMaster from './pages/tenant/TaxMaster'
@@ -21,6 +22,7 @@ import Tickets from './pages/tenant/Tickets'
 import ManualTickets from './pages/tenant/ManualTickets'
 import Reports from './pages/tenant/Reports'
 import StaffReport from './pages/tenant/StaffReport'
+import AgentReport from './pages/tenant/AgentReport'
 import Audit from './pages/tenant/Audit'
 import Developer from './pages/tenant/Developer'
 
@@ -78,6 +80,7 @@ export default function App() {
       <Route path="/tenant/categories" element={<TenantPage><Categories /></TenantPage>} />
       <Route path="/tenant/prices" element={<TenantPage><Prices /></TenantPage>} />
       <Route path="/tenant/staff" element={<TenantPage><Staff /></TenantPage>} />
+      <Route path="/tenant/agents" element={<TenantPage><Agents /></TenantPage>} />
       <Route path="/tenant/assignments" element={<TenantPage><Assignments /></TenantPage>} />
       <Route path="/tenant/company" element={<TenantPage><Company /></TenantPage>} />
       <Route path="/tenant/tax-master" element={<TenantPage><TaxMaster /></TenantPage>} />
@@ -87,6 +90,7 @@ export default function App() {
       <Route path="/tenant/manual-tickets" element={<TenantPage><ManualTickets /></TenantPage>} />
       <Route path="/tenant/reports" element={<TenantPage><Reports /></TenantPage>} />
       <Route path="/tenant/reports/staff" element={<TenantPage><StaffReport /></TenantPage>} />
+      <Route path="/tenant/reports/agents" element={<TenantPage><AgentReport /></TenantPage>} />
       <Route path="/tenant/audit" element={<TenantPage><Audit /></TenantPage>} />
       <Route path="/tenant/developer" element={<TenantPage><Developer /></TenantPage>} />
 

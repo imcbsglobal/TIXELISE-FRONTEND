@@ -13,6 +13,7 @@ import { getSession } from '@/session'
 
 const MAX_PER_CATEGORY = 100
 const SELF = '__self__'
+const NO_AGENT = '__none__'
 
 async function fetchAll(path) {
   const rows = []
@@ -98,11 +99,13 @@ export default function ManualTickets() {
   const [events, setEvents] = useState([])
   const [assignments, setAssignments] = useState([])
   const [staff, setStaff] = useState([])
+  const [agents, setAgents] = useState([])
   const [categories, setCategories] = useState([])
   const [taxSetting, setTaxSetting] = useState(null)
 
   const [eventId, setEventId] = useState('')
   const [staffId, setStaffId] = useState(SELF)
+  const [agentId, setAgentId] = useState(NO_AGENT)
   const [rows, setRows] = useState([blankRow()])
 
   const [prices, setPrices] = useState([])
@@ -123,14 +126,16 @@ export default function ManualTickets() {
       fetchAll('/admin/events/'),
       fetchAll('/admin/assignments/'),
       fetchAll('/admin/staff/'),
+      fetchAll('/admin/agents/?status=active'),
       fetchAll('/admin/categories/'),
       api.get('/admin/tax-settings/').catch(() => null),
     ])
-      .then(([eventRows, assignmentRows, staffRows, categoryRows, setting]) => {
+      .then(([eventRows, assignmentRows, staffRows, agentRows, categoryRows, setting]) => {
         if (cancelled) return
         setEvents(eventRows.filter((row) => row.status === 'active'))
         setAssignments(assignmentRows.filter((row) => row.status === 'active'))
         setStaff(staffRows.filter((row) => row.status !== 'inactive'))
+        setAgents(agentRows.filter((row) => row.status === 'active'))
         setCategories(categoryRows)
         setTaxSetting(setting)
       })
@@ -222,6 +227,7 @@ export default function ManualTickets() {
   function resetAfterSuccess() {
     setIssued(null)
     setRows([blankRow()])
+    setAgentId(NO_AGENT)
     setError('')
   }
 
@@ -248,12 +254,14 @@ export default function ManualTickets() {
       const result = await api.post('/admin/tickets/manual/', {
         event: Number(eventId),
         staff: staffId === SELF ? null : Number(staffId),
+        agent: agentId === NO_AGENT ? null : Number(agentId),
         items,
         idempotency_key: keyRef.current,
       })
       setIssued(result)
       keyRef.current = newIdempotencyKey()
       setRows([blankRow()])
+      setAgentId(NO_AGENT)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -286,6 +294,12 @@ export default function ManualTickets() {
                   {issued.event_code} · {issued.staff_name || issued.staff_code} · Sale{' '}
                   <span className="font-mono">{issued.sale_reference}</span>
                 </p>
+                {issued.agent_id ? (
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    Agent: {issued.agent_code} — {issued.agent_name}
+                    {issued.agent_place ? ` · ${issued.agent_place}` : ''}
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -361,7 +375,7 @@ export default function ManualTickets() {
       <PageHead
         eyebrow="MANUAL TICKETS"
         title="Manual ticket"
-        subtitle="Issue manual tickets as yourself or on behalf of assigned staff. The price and tax are charged like a POS sale."
+        subtitle="Issue manual tickets as yourself or on behalf of assigned staff. Optionally attribute the sale to an agent. The price and tax are charged like a POS sale."
       />
 
       <form onSubmit={handleSubmit} className="mx-auto max-w-5xl space-y-5">
@@ -369,7 +383,7 @@ export default function ManualTickets() {
         {error ? <Alert variant="error">{error}</Alert> : null}
 
         <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Event" hint="Only active events can issue tickets.">
               <Select value={eventId} onValueChange={changeEvent} disabled={loading}>
                 <SelectTrigger className="w-full">
@@ -403,6 +417,22 @@ export default function ManualTickets() {
                 </SelectContent>
               </Select>
             </Field>
+
+            <Field label="Agent" hint="Optional. Used for agent sales reporting.">
+              <Select value={agentId} onValueChange={setAgentId} disabled={loading || agents.length === 0}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="No agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_AGENT}>No agent</SelectItem>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent.id} value={String(agent.id)}>
+                      {agent.code} — {agent.name} ({agent.place})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
 
           {eventId && !pricesLoading && prices.length === 0 ? (
@@ -422,6 +452,16 @@ export default function ManualTickets() {
               on a staff member&apos;s behalf,{' '}
               <Link to="/tenant/assignments" className="font-semibold text-primary underline">
                 open Assignments
+              </Link>
+              .
+            </p>
+          ) : null}
+
+          {!loading && agents.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              No active agents yet, so agent attribution is unavailable.{' '}
+              <Link to="/tenant/agents" className="font-semibold text-primary underline">
+                Create an agent
               </Link>
               .
             </p>

@@ -4,6 +4,7 @@ import { api } from '@/api'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { formatProgramWindow } from '@/lib/time'
 
 /**
  * Renders one ticket as an 80mm-style receipt using the tenant's print
@@ -53,7 +54,11 @@ export default function PrintTicketDialog({ ticketId, open, onOpenChange }) {
             {ticket.event.venue ? (
               <p className="text-[11.5px] text-muted-foreground">{ticket.event.venue}</p>
             ) : null}
-            {ticket.event.end_at ? (
+            {ticket.event.program_start_time && ticket.event.program_end_time ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Valid {formatProgramWindow(ticket.event.program_start_time, ticket.event.program_end_time)}
+              </p>
+            ) : ticket.event.end_at ? (
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Valid {new Date(ticket.event.start_at).toLocaleString()} –{' '}
                 {new Date(ticket.event.end_at).toLocaleString()}

@@ -67,6 +67,7 @@ const NAVS = {
         children: [
           { to: '/tenant/reports', label: 'Overview', icon: BarChart3 },
           { to: '/tenant/reports/staff', label: 'Staff report', icon: UserCheck },
+          { to: '/tenant/reports/agents', label: 'Agent report', icon: UserCheck },
           { to: '/tenant/sales', label: 'Sales', icon: Receipt },
           { to: '/tenant/tickets', label: 'Tickets', icon: Ticket },
           { to: '/tenant/audit', label: 'Audit log', icon: ClipboardList },
@@ -78,6 +79,7 @@ const NAVS = {
         label: 'Master',
         icon: Database,
         children: [
+          { to: '/tenant/agents', label: 'Agents', icon: Users },
           { to: '/tenant/tax-master', label: 'Tax master', icon: Percent },
           { to: '/tenant/ticket-print', label: 'Ticket print', icon: Printer },
         ],
@@ -95,6 +97,7 @@ const TITLES = {
   '/tenant/prices': 'Prices',
   '/tenant/ticket-print': 'Ticket print',
   '/tenant/staff': 'User management',
+  '/tenant/agents': 'Agents',
   '/tenant/assignments': 'Assignments',
   '/tenant/company': 'Company',
   '/tenant/tax-master': 'Tax master',
@@ -103,6 +106,7 @@ const TITLES = {
   '/tenant/ticketing': 'Ticketing',
   '/tenant/reports': 'Overview',
   '/tenant/reports/staff': 'Staff report',
+  '/tenant/reports/agents': 'Agent report',
   '/tenant/audit': 'Audit log',
 }
 
