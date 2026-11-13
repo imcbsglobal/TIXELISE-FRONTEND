@@ -237,7 +237,7 @@ export default function ManualTickets() {
       <PageHead
         eyebrow="MANUAL TICKETS"
         title="Manual ticket"
-        subtitle="Issue complimentary tickets as yourself or on behalf of assigned staff. They print and reprint like normal tickets but never count as revenue."
+        subtitle="Issue manual tickets as yourself or on behalf of assigned staff. They charge the configured price, are taxed like POS sales, and count as revenue."
       >
         <RefreshButton loading={historyLoading} onClick={loadHistory} />
       </PageHead>
@@ -373,7 +373,7 @@ export default function ManualTickets() {
                 >
                   <Plus className="h-3.5 w-3.5" /> Add category
                 </Button>
-                <p className="text-xs text-muted-foreground">{total} complimentary ticket{total === 1 ? '' : 's'}</p>
+                <p className="text-xs text-muted-foreground">{total} ticket{total === 1 ? '' : 's'}</p>
               </div>
             </div>
 
@@ -386,7 +386,7 @@ export default function ManualTickets() {
         <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="font-display text-[15px] font-extrabold tracking-[-0.01em]">Complimentary tickets issued</h2>
+              <h2 className="font-display text-[15px] font-extrabold tracking-[-0.01em]">Manual tickets issued</h2>
               <p className="mt-0.5 text-[13px] text-muted-foreground">Manual entries only — POS sales are on the Sales page.</p>
             </div>
             <div className="flex flex-wrap items-end gap-2">
@@ -420,8 +420,8 @@ export default function ManualTickets() {
           ) : history.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {dateFrom || dateTo
-                ? 'No complimentary tickets were issued in this date range.'
-                : 'Nothing issued yet. Complimentary tickets you create will be listed here.'}
+                ? 'No manual tickets were issued in this date range.'
+                : 'Nothing issued yet. Manual tickets you create will be listed here.'}
             </p>
           ) : (
             <ul className="divide-y divide-border">
@@ -443,8 +443,13 @@ export default function ManualTickets() {
                           {sale.event_code} · {sale.staff_name || sale.staff_code} · {formatWhen(sale.created_at)}
                         </span>
                       </span>
-                      <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">
-                        {(sale.tickets || []).length} comp{(sale.tickets || []).length === 1 ? '' : 's'}
+                      <span className="shrink-0 text-right">
+                        <span className="block text-[13px] font-semibold">
+                          {(sale.tickets || []).length} ticket{(sale.tickets || []).length === 1 ? '' : 's'}
+                        </span>
+                        <span className="block font-mono text-[11.5px] text-muted-foreground">
+                          {sale.currency} {sale.total_payable}
+                        </span>
                       </span>
                     </button>
 
