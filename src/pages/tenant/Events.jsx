@@ -27,9 +27,11 @@ import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } fro
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { EventTaxFields } from '@/components/EventTaxFields'
 import { ProgramDurationField } from '@/components/ProgramDurationField'
-import { uniqueCodeFromName } from '@/lib/setup'
+import VenueInput from '@/components/VenueInput'
+import { fetchAll, uniqueCodeFromName } from '@/lib/setup'
 import { eventTaxSummary, validateEventTax } from '@/lib/tax'
 import { formatProgramWindow, toApiTime, toTimeInput, validateProgramWindow } from '@/lib/time'
+import { collectVenues } from '@/lib/venues'
 
 const PAGE_SIZE = 20
 const STATUSES = ['draft', 'active', 'completed', 'cancelled']
@@ -81,6 +83,7 @@ export default function Events() {
   const viewParam = searchParams.get('view')
   const [viewMode, setViewMode] = useState(viewParam === 'grid' ? 'grid' : 'list')
   const [reloadToken, setReloadToken] = useState(0)
+  const [venueOptions, setVenueOptions] = useState([])
 
   const [busyId, setBusyId] = useState(null)
   const [actionError, setActionError] = useState('')
@@ -123,6 +126,18 @@ export default function Events() {
   useEffect(() => {
     setViewMode(viewParam === 'grid' ? 'grid' : 'list')
   }, [viewParam])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAll('/admin/events/')
+      .then((list) => {
+        if (!cancelled) setVenueOptions(collectVenues(list))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [reloadToken])
 
   useEffect(() => {
     let cancelled = false
@@ -567,10 +582,11 @@ export default function Events() {
             </Field>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Venue" hint="Optional">
-                <Input
+              <Field label="Venue" hint="Optional — existing event sections appear as suggestions.">
+                <VenueInput
                   value={form.venue}
-                  onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                  onChange={(value) => setForm({ ...form, venue: value })}
+                  venues={venueOptions}
                   placeholder="Central Auditorium"
                 />
               </Field>
@@ -710,8 +726,13 @@ export default function Events() {
               </Field>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Venue">
-                  <Input value={detailForm.venue} onChange={(e) => setDetailForm({ ...detailForm, venue: e.target.value })} />
+                <Field label="Venue" hint="Choose an existing event section or type a new one.">
+                  <VenueInput
+                    value={detailForm.venue}
+                    onChange={(value) => setDetailForm({ ...detailForm, venue: value })}
+                    venues={venueOptions}
+                    placeholder="Central Auditorium"
+                  />
                 </Field>
                 <Field label="Address">
                   <Input value={detailForm.address} onChange={(e) => setDetailForm({ ...detailForm, address: e.target.value })} />

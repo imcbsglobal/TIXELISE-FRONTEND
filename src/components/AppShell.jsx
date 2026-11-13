@@ -9,6 +9,7 @@ import {
   Database,
   LayoutDashboard,
   LogOut,
+  MapPin,
   Percent,
   Printer,
   Receipt,
@@ -80,6 +81,7 @@ const NAVS = {
         icon: Database,
         children: [
           { to: '/tenant/agents', label: 'Agents', icon: Users },
+          { to: '/tenant/event-venues', label: 'Event sections', icon: MapPin },
           { to: '/tenant/tax-master', label: 'Tax master', icon: Percent },
           { to: '/tenant/ticket-print', label: 'Ticket print', icon: Printer },
         ],
@@ -98,6 +100,7 @@ const TITLES = {
   '/tenant/ticket-print': 'Ticket print',
   '/tenant/staff': 'User management',
   '/tenant/agents': 'Agents',
+  '/tenant/event-venues': 'Event sections',
   '/tenant/assignments': 'Assignments',
   '/tenant/company': 'Company',
   '/tenant/tax-master': 'Tax master',

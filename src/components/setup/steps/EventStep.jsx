@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { EventTaxFields } from '@/components/EventTaxFields'
 import { ProgramDurationField } from '@/components/ProgramDurationField'
+import VenueInput from '@/components/VenueInput'
 import { FieldError } from '@/components/setup/FieldError'
 import {
   Select,
@@ -20,6 +21,7 @@ import { StepShell } from '@/components/setup/StepShell'
 import { friendlyError, isDuplicateMessage, localTimeZone, toUtcIso, uniqueCodeFromName } from '@/lib/setup'
 import { eventTaxSummary, validateEventTax } from '@/lib/tax'
 import { formatProgramWindow, toApiTime, validateProgramWindow } from '@/lib/time'
+import { collectVenues } from '@/lib/venues'
 
 const EVENT_TYPES = [
   { value: 'regular', label: 'Regular event' },
@@ -73,6 +75,7 @@ export default function EventStep({
   const [reuse, setReuse] = useState(null)
 
   const existingCodes = events.map((item) => item.code)
+  const venueOptions = collectVenues(events)
 
   function update(patch) {
     setForm((current) => ({ ...current, ...patch }))
@@ -295,10 +298,11 @@ export default function EventStep({
         </Field>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field label="Venue" hint="Optional — where the event happens.">
-            <Input
+          <Field label="Venue" hint="Optional — existing event sections appear as suggestions.">
+            <VenueInput
               value={form.venue}
-              onChange={(e) => update({ venue: e.target.value })}
+              onChange={(value) => update({ venue: value })}
+              venues={venueOptions}
               placeholder="Central Auditorium"
             />
           </Field>
