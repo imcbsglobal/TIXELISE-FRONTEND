@@ -25,7 +25,11 @@ import {
 } from '@/components/ui/select'
 import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } from '@/components/ui/page'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { EventTaxFields } from '@/components/EventTaxFields'
+import { ProgramDurationField } from '@/components/ProgramDurationField'
 import { uniqueCodeFromName } from '@/lib/setup'
+import { eventTaxSummary, validateEventTax } from '@/lib/tax'
+import { formatProgramWindow, toApiTime, toTimeInput, validateProgramWindow } from '@/lib/time'
 
 const PAGE_SIZE = 20
 const STATUSES = ['draft', 'active', 'completed', 'cancelled']
@@ -42,6 +46,12 @@ const EMPTY_FORM = {
   end_at: '',
   sales_start_at: '',
   sales_end_at: '',
+  program_start_time: '',
+  program_end_time: '',
+  tax_mode: 'inherit',
+  tax_rate: '',
+  hsn_code: '',
+  prices_include_tax: false,
 }
 
 const EVENT_TYPES = [
@@ -82,14 +92,30 @@ export default function Events() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
+  const [createProgramError, setCreateProgramError] = useState('')
+  const [createTaxErrors, setCreateTaxErrors] = useState({})
+  const [companyTax, setCompanyTax] = useState(null)
 
   const [detail, setDetail] = useState(null)
   const [detailForm, setDetailForm] = useState(EMPTY_FORM)
   const [detailError, setDetailError] = useState('')
+  const [detailProgramError, setDetailProgramError] = useState('')
+  const [detailTaxErrors, setDetailTaxErrors] = useState({})
   const [savingDetail, setSavingDetail] = useState(false)
 
   useEffect(() => {
     document.title = 'Tixelise | Events'
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    api
+      .get('/admin/tax-settings/')
+      .then((res) => !cancelled && setCompanyTax(res))
+      .catch(() => !cancelled && setCompanyTax(null))
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // The sidebar's main Events link opens in grid view; the Entries > Event link
@@ -182,6 +208,11 @@ export default function Events() {
   async function handleCreate(event) {
     event.preventDefault()
     setCreateError('')
+    const programError = validateProgramWindow(form.program_start_time, form.program_end_time)
+    setCreateProgramError(programError)
+    const taxErrors = validateEventTax(form)
+    setCreateTaxErrors(taxErrors)
+    if (programError || Object.keys(taxErrors).length) return
     setCreating(true)
     try {
       const payload = {
@@ -193,6 +224,12 @@ export default function Events() {
         description: form.description.trim(),
         venue: form.venue.trim(),
         address: form.address.trim(),
+        program_start_time: toApiTime(form.program_start_time),
+        program_end_time: toApiTime(form.program_end_time),
+        tax_mode: form.tax_mode,
+        tax_rate: form.tax_rate === '' ? null : form.tax_rate,
+        hsn_code: form.hsn_code.trim(),
+        prices_include_tax: form.prices_include_tax,
       }
       if (form.event_type === 'periodical') {
         payload.start_at = toIso(form.start_at)
@@ -202,6 +239,8 @@ export default function Events() {
       }
       await api.post('/admin/events/', payload)
       setForm(EMPTY_FORM)
+      setCreateProgramError('')
+      setCreateTaxErrors({})
       setCreateOpen(false)
       setPage(1)
       reload()
@@ -215,6 +254,8 @@ export default function Events() {
   function openDetail(ev) {
     setActionError('')
     setDetailError('')
+    setDetailProgramError('')
+    setDetailTaxErrors({})
     setDetail(ev)
     setDetailForm({
       code: ev.code,
@@ -227,12 +268,29 @@ export default function Events() {
       end_at: toLocalInput(ev.end_at),
       sales_start_at: toLocalInput(ev.sales_start_at),
       sales_end_at: toLocalInput(ev.sales_end_at),
+      program_start_time: toTimeInput(ev.program_start_time),
+      program_end_time: toTimeInput(ev.program_end_time),
+      tax_mode: ev.tax_mode || 'inherit',
+      tax_rate:
+        ev.tax_rate === null || ev.tax_rate === undefined || ev.tax_rate === ''
+          ? ''
+          : String(Number(ev.tax_rate)),
+      hsn_code: ev.hsn_code || '',
+      prices_include_tax: Boolean(ev.prices_include_tax),
     })
   }
 
   async function handleSaveDetail(event) {
     event.preventDefault()
     setDetailError('')
+    const programError = validateProgramWindow(
+      detailForm.program_start_time,
+      detailForm.program_end_time,
+    )
+    setDetailProgramError(programError)
+    const taxErrors = validateEventTax(detailForm)
+    setDetailTaxErrors(taxErrors)
+    if (programError || Object.keys(taxErrors).length) return
     setSavingDetail(true)
     try {
       const payload = {
@@ -242,6 +300,12 @@ export default function Events() {
         description: detailForm.description.trim(),
         venue: detailForm.venue.trim(),
         address: detailForm.address.trim(),
+        program_start_time: toApiTime(detailForm.program_start_time),
+        program_end_time: toApiTime(detailForm.program_end_time),
+        tax_mode: detailForm.tax_mode,
+        tax_rate: detailForm.tax_rate === '' ? null : detailForm.tax_rate,
+        hsn_code: detailForm.hsn_code.trim(),
+        prices_include_tax: detailForm.prices_include_tax,
       }
       if (detailForm.event_type === 'periodical') {
         payload.start_at = toIso(detailForm.start_at)
@@ -295,7 +359,13 @@ export default function Events() {
       >
         <RefreshButton loading={loading} onClick={reload} />
         {viewParam !== 'grid' ? (
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button
+            onClick={() => {
+              setCreateProgramError('')
+              setCreateTaxErrors({})
+              setCreateOpen(true)
+            }}
+          >
             <Plus className="h-4 w-4" /> New event
           </Button>
         ) : null}
@@ -361,6 +431,8 @@ export default function Events() {
                   <TableHead>Code</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Venue</TableHead>
+                  <TableHead>Program</TableHead>
+                  <TableHead>Tax</TableHead>
                   <TableHead>Starts</TableHead>
                   <TableHead>Ends</TableHead>
                   <TableHead>Status</TableHead>
@@ -369,15 +441,21 @@ export default function Events() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <LoadingRow colSpan={7} />
+                  <LoadingRow colSpan={9} />
                 ) : rows.length === 0 ? (
-                  <EmptyRow colSpan={7} message="No events found." />
+                  <EmptyRow colSpan={9} message="No events found." />
                 ) : (
                   rows.map((ev) => (
                     <TableRow key={ev.id}>
                       <TableCell className="font-mono text-[13.5px]">{ev.code}</TableCell>
                       <TableCell className="font-medium">{ev.name}</TableCell>
                       <TableCell className="text-muted-foreground">{ev.venue || '—'}</TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatProgramWindow(ev.program_start_time, ev.program_end_time)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {eventTaxSummary(ev)}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{new Date(ev.start_at).toLocaleString()}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {ev.end_at ? new Date(ev.end_at).toLocaleString() : 'No end'}
@@ -412,6 +490,16 @@ export default function Events() {
                       <dd className="truncate text-right font-medium">{ev.venue || '—'}</dd>
                     </div>
                     <div className="flex justify-between gap-3">
+                      <dt className="shrink-0 text-muted-foreground">Program</dt>
+                      <dd className="text-right font-medium">
+                        {formatProgramWindow(ev.program_start_time, ev.program_end_time)}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="shrink-0 text-muted-foreground">Tax</dt>
+                      <dd className="truncate text-right font-medium">{eventTaxSummary(ev)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
                       <dt className="shrink-0 text-muted-foreground">Starts</dt>
                       <dd className="text-right font-medium">{new Date(ev.start_at).toLocaleString()}</dd>
                     </div>
@@ -432,7 +520,17 @@ export default function Events() {
         </CardContent>
       </Card>
 
-      <Dialog open={createOpen} onOpenChange={(v) => !v && (setCreateOpen(false), setCreateError(''))}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(v) => {
+          if (!v) {
+            setCreateOpen(false)
+            setCreateError('')
+            setCreateProgramError('')
+            setCreateTaxErrors({})
+          }
+        }}
+      >
         <DialogContent className="w-[min(100%-2rem,760px)]">
           <DialogHeader>
             <DialogTitle>New event</DialogTitle>
@@ -529,6 +627,35 @@ export default function Events() {
               </div>
             )}
 
+            <ProgramDurationField
+              start={form.program_start_time}
+              end={form.program_end_time}
+              error={createProgramError}
+              onChange={(start, end) => {
+                setForm({ ...form, program_start_time: start, program_end_time: end })
+                setCreateProgramError('')
+              }}
+            />
+
+            <EventTaxFields
+              taxMode={form.tax_mode}
+              taxRate={form.tax_rate}
+              hsnCode={form.hsn_code}
+              pricesIncludeTax={form.prices_include_tax}
+              companySetting={companyTax}
+              errors={createTaxErrors}
+              onChange={(patch) => {
+                setForm({ ...form, ...patch })
+                setCreateTaxErrors((current) => {
+                  if ('tax_mode' in patch) return {}
+                  const next = { ...current }
+                  if ('tax_rate' in patch) delete next.tax_rate
+                  if ('hsn_code' in patch) delete next.hsn_code
+                  return next
+                })
+              }}
+            />
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
                 Cancel
@@ -541,7 +668,16 @@ export default function Events() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!detail} onOpenChange={(v) => !v && setDetail(null)}>
+      <Dialog
+        open={!!detail}
+        onOpenChange={(v) => {
+          if (!v) {
+            setDetail(null)
+            setDetailTaxErrors({})
+            setDetailProgramError('')
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Event {detail?.code}</DialogTitle>
@@ -604,12 +740,7 @@ export default function Events() {
                 </Select>
               </Field>
 
-              {detailForm.event_type === 'regular' ? (
-                <p className="rounded-md bg-muted px-4 py-3 text-[13px] text-muted-foreground">
-                  Started {new Date(detailForm.start_at || detail.start_at).toLocaleString()} · no end
-                  date. Selling stays open until the event is completed or cancelled.
-                </p>
-              ) : (
+              {detailForm.event_type !== 'regular' ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Starts at">
                     <Input type="datetime-local" value={detailForm.start_at} onChange={(e) => setDetailForm({ ...detailForm, start_at: e.target.value })} required />
@@ -624,7 +755,36 @@ export default function Events() {
                     <Input type="datetime-local" value={detailForm.sales_end_at} onChange={(e) => setDetailForm({ ...detailForm, sales_end_at: e.target.value })} />
                   </Field>
                 </div>
-              )}
+              ) : null}
+
+              <ProgramDurationField
+                start={detailForm.program_start_time}
+                end={detailForm.program_end_time}
+                error={detailProgramError}
+                onChange={(start, end) => {
+                  setDetailForm({ ...detailForm, program_start_time: start, program_end_time: end })
+                  setDetailProgramError('')
+                }}
+              />
+
+              <EventTaxFields
+                taxMode={detailForm.tax_mode}
+                taxRate={detailForm.tax_rate}
+                hsnCode={detailForm.hsn_code}
+                pricesIncludeTax={detailForm.prices_include_tax}
+                companySetting={companyTax}
+                errors={detailTaxErrors}
+                onChange={(patch) => {
+                  setDetailForm({ ...detailForm, ...patch })
+                  setDetailTaxErrors((current) => {
+                    if ('tax_mode' in patch) return {}
+                    const next = { ...current }
+                    if ('tax_rate' in patch) delete next.tax_rate
+                    if ('hsn_code' in patch) delete next.hsn_code
+                    return next
+                  })
+                }}
+              />
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDetail(null)}>

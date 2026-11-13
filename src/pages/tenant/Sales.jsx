@@ -273,6 +273,7 @@ export default function Sales() {
                         <TableCell className="text-muted-foreground">
                           {detail.currency} {i.tax_amount}
                           {Number(i.tax_rate_snapshot) ? ` (${i.tax_rate_snapshot}%)` : ''}
+                          {i.hsn_code ? ` · HSN ${i.hsn_code}` : ''}
                         </TableCell>
                       </TableRow>
                     ))}

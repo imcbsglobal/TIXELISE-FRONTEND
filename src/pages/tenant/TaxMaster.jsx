@@ -430,8 +430,8 @@ export default function TaxMaster() {
   function toggleEnabled(enabled) {
     patchTaxSetting({ enabled }, (saved) =>
       enabled
-        ? `Tax on: every ticket now charges ${saved.rate}% (${saved.code}).`
-        : 'Tax off: ticket prices are charged exactly as configured.',
+        ? `Company tax on: inheriting events now charge ${saved.rate}% (${saved.code}).`
+        : 'Company tax off: inheriting events charge prices exactly as configured.',
     )
   }
 
@@ -553,25 +553,26 @@ export default function TaxMaster() {
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
                 Ticket sales
               </p>
-              <h2 className="mt-1 font-display text-lg font-extrabold">Apply tax to ticket sales</h2>
+              <h2 className="mt-1 font-display text-lg font-extrabold">Company ticket tax</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                When enabled, every ticket charges the selected rate on top of the price set in
-                Prices. Sale lines and reports keep the taxable amount and the tax separate, and
-                each past sale keeps the rate it was sold at.
+                This is the company default. Events that use “Use company tax setting” charge this
+                rate; events with their own tax settings override it. Sale lines and reports keep
+                the taxable amount and the tax separate, and each past sale keeps the rate it was
+                sold at.
               </p>
             </div>
             <div className="flex items-center gap-3 rounded-[13px] border border-input bg-background px-4 py-3">
               <div>
-                <p className="text-sm font-semibold">Enable tax</p>
+                <p className="text-sm font-semibold">Enable company tax</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {enabled ? 'Charging on new sales' : 'Not charged'}
+                  {enabled ? 'Charging on inheriting events' : 'Not charged'}
                 </p>
               </div>
               <ToggleSwitch
                 checked={enabled}
                 disabled={taxSaving || !taxSetting?.configured}
                 onChange={toggleEnabled}
-                label="Enable tax on ticket sales"
+                label="Enable company tax on ticket sales"
               />
             </div>
           </div>
@@ -625,7 +626,7 @@ export default function TaxMaster() {
 
           {taxSetting?.configured ? (
             <p className="mt-4 text-sm text-muted-foreground">
-              Applied:{' '}
+              Company default:{' '}
               <span className="font-semibold text-foreground">
                 {taxSetting.code} · {taxSetting.rate}%
               </span>
@@ -633,14 +634,15 @@ export default function TaxMaster() {
                 ? ` · CGST ${taxSetting.cgst}% · SGST ${taxSetting.sgst}% · IGST ${taxSetting.igst}%`
                 : ''}
               {' · '}
-              {taxSetting.enabled ? 'charging on new sales' : 'not charged'}
+              {taxSetting.enabled ? 'charging on inheriting events' : 'not charged'}
               {taxSetting.synced_at
                 ? ` · last read ${new Date(taxSetting.synced_at).toLocaleString()}`
                 : ''}
             </p>
           ) : (
             <p className="mt-4 text-sm text-muted-foreground">
-              No tax is applied to ticket sales yet. Select a record above and enable tax.
+              No company tax is configured yet. Select a record above and enable tax, or set tax
+              directly on an event.
             </p>
           )}
         </CardContent>

@@ -31,14 +31,27 @@ const EMPTY_FORM = { event: '', category: '', amount: '', currency: 'INR' }
 
 // Preview of what a ticket will actually cost once tax is applied. The backend
 // owns the arithmetic; this only mirrors it for the table and the edit dialog.
-function taxPreview(amount, setting) {
+function taxPreview(amount, event, setting) {
   const value = Number(amount)
-  const rate = Number(setting?.rate || 0)
-  if (!setting?.enabled || !Number.isFinite(value) || rate <= 0) return null
-  if (setting.prices_include_tax) {
-    return { rate, gross: value, tax: value - value / (1 + rate / 100) }
+  if (!Number.isFinite(value)) return null
+
+  const mode = event?.tax_mode || 'inherit'
+  if (mode === 'disabled') return null
+
+  const usingEvent = mode === 'event'
+  const rate = Number(usingEvent ? event?.tax_rate || 0 : setting?.rate || 0)
+  if (usingEvent ? rate <= 0 : !setting?.enabled || rate <= 0) return null
+
+  const inclusive = usingEvent
+    ? Boolean(event?.prices_include_tax)
+    : Boolean(setting?.prices_include_tax)
+  const code = usingEvent ? '' : setting?.code || ''
+  const hsn = usingEvent ? event?.hsn_code || '' : ''
+
+  if (inclusive) {
+    return { rate, gross: value, tax: value - value / (1 + rate / 100), inclusive, code, hsn }
   }
-  return { rate, gross: value, tax: (value * rate) / 100 }
+  return { rate, gross: value, tax: (value * rate) / 100, inclusive, code, hsn }
 }
 
 export default function Prices() {
@@ -139,6 +152,9 @@ export default function Prices() {
     const hay = `${p.category_code || ''} ${ev?.code || ''} ${ev?.name || ''} ${cat?.name || ''}`.toLowerCase()
     return hay.includes(search.trim().toLowerCase())
   })
+  const detailTax = detail
+    ? taxPreview(detailForm.amount, eventById[detail.event], taxSetting)
+    : null
 
   function reload() {
     setReloadToken((token) => token + 1)
@@ -338,7 +354,7 @@ export default function Prices() {
                   rows.map((p) => {
                     const ev = eventById[p.event]
                     const cat = categoryById[p.category]
-                    const taxed = taxPreview(p.amount, taxSetting)
+                    const taxed = taxPreview(p.amount, ev, taxSetting)
                     return (
                       <TableRow key={p.id}>
                         <TableCell className="font-mono text-[13.5px]">{ev ? ev.code : p.event}</TableCell>
@@ -346,7 +362,7 @@ export default function Prices() {
                         <TableCell className="font-semibold">{p.amount}</TableCell>
                         <TableCell className="text-muted-foreground">
                           {taxed
-                            ? `${(taxed.gross + (taxSetting.prices_include_tax ? 0 : taxed.tax)).toFixed(2)} · ${taxed.rate}%`
+                            ? `${(taxed.gross + (taxed.inclusive ? 0 : taxed.tax)).toFixed(2)} · ${taxed.rate}%`
                             : '—'}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{p.currency}</TableCell>
@@ -502,19 +518,17 @@ export default function Prices() {
                 </Field>
               </div>
 
-              {taxPreview(detailForm.amount, taxSetting) ? (
+              {detailTax ? (
                 <p className="rounded-md border border-border px-3.5 py-2.5 text-xs text-muted-foreground">
-                  {taxSetting.prices_include_tax ? 'Includes' : 'Plus'}{' '}
+                  {detailTax.inclusive ? 'Includes' : 'Plus'}{' '}
                   <span className="font-semibold text-foreground">
-                    {taxPreview(detailForm.amount, taxSetting).tax.toFixed(2)}
+                    {detailTax.tax.toFixed(2)}
                   </span>{' '}
-                  tax ({taxSetting.code} {taxSetting.rate}%). A ticket costs{' '}
+                  tax ({detailTax.rate}%{detailTax.hsn ? ` · HSN ${detailTax.hsn}` : detailTax.code ? ` · ${detailTax.code}` : ''}).
+                  A ticket costs{' '}
                   <span className="font-semibold text-foreground">
                     {(
-                      taxPreview(detailForm.amount, taxSetting).gross +
-                      (taxSetting.prices_include_tax
-                        ? 0
-                        : taxPreview(detailForm.amount, taxSetting).tax)
+                      detailTax.gross + (detailTax.inclusive ? 0 : detailTax.tax)
                     ).toFixed(2)}
                   </span>
                   .

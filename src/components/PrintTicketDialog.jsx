@@ -70,8 +70,12 @@ export default function PrintTicketDialog({ ticketId, open, onOpenChange }) {
                 </p>
                 {Number(ticket.tax_rate) > 0 ? (
                   <p className="text-muted-foreground">
-                    Tax {ticket.tax_code || ''} {ticket.tax_rate}%: {ticket.tax_amount}
+                    Tax {ticket.tax_code ? `${ticket.tax_code} ` : ''}
+                    {ticket.tax_rate}%: {ticket.tax_amount}
                   </p>
+                ) : null}
+                {ticket.hsn_code ? (
+                  <p className="text-muted-foreground">HSN {ticket.hsn_code}</p>
                 ) : null}
                 <p className="font-bold">
                   Total {ticket.currency} {ticket.total}

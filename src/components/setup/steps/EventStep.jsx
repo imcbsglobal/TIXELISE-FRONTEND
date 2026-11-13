@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { EventTaxFields } from '@/components/EventTaxFields'
+import { ProgramDurationField } from '@/components/ProgramDurationField'
 import { FieldError } from '@/components/setup/FieldError'
 import {
   Select,
@@ -16,6 +18,8 @@ import {
 } from '@/components/ui/select'
 import { StepShell } from '@/components/setup/StepShell'
 import { friendlyError, isDuplicateMessage, localTimeZone, toUtcIso, uniqueCodeFromName } from '@/lib/setup'
+import { eventTaxSummary, validateEventTax } from '@/lib/tax'
+import { formatProgramWindow, toApiTime, validateProgramWindow } from '@/lib/time'
 
 const EVENT_TYPES = [
   { value: 'regular', label: 'Regular event' },
@@ -39,6 +43,9 @@ function validate(form) {
       problems.sales_end_at = 'Sales close must be later than sales open.'
     }
   }
+  const programError = validateProgramWindow(form.program_start_time, form.program_end_time)
+  if (programError) problems.program = programError
+  Object.assign(problems, validateEventTax(form))
   return problems
 }
 
@@ -88,6 +95,15 @@ export default function EventStep({
     update({ code: value.toUpperCase().replace(/[^A-Z0-9]/g, ''), codeTouched: true })
   }
 
+  function updateProgram(start, end) {
+    setForm((current) => ({ ...current, program_start_time: start, program_end_time: end }))
+    setFieldErrors((current) => {
+      const next = { ...current }
+      delete next.program
+      return next
+    })
+  }
+
   async function handleSubmit(submitEvent) {
     submitEvent.preventDefault()
     const problems = validate(form)
@@ -118,6 +134,12 @@ export default function EventStep({
         description: form.description.trim(),
         venue: form.venue.trim(),
         address: form.address.trim(),
+        program_start_time: toApiTime(form.program_start_time),
+        program_end_time: toApiTime(form.program_end_time),
+        tax_mode: form.tax_mode || 'inherit',
+        tax_rate: form.tax_rate === '' || form.tax_rate === undefined ? null : form.tax_rate,
+        hsn_code: String(form.hsn_code || '').trim(),
+        prices_include_tax: Boolean(form.prices_include_tax),
       }
       if (form.event_type === 'periodical') {
         payload.start_at = toUtcIso(form.start_at)
@@ -170,6 +192,18 @@ export default function EventStep({
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Ends</dt>
               <dd className="font-medium">{event.end_at ? formatWhen(event.end_at) : 'No end'}</dd>
+            </div>
+            {event.program_start_time && event.program_end_time ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Program</dt>
+                <dd className="font-medium">
+                  {formatProgramWindow(event.program_start_time, event.program_end_time)}
+                </dd>
+              </div>
+            ) : null}
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Tax</dt>
+              <dd className="font-medium">{eventTaxSummary(event)}</dd>
             </div>
             {event.venue ? (
               <div className="flex justify-between gap-4">
@@ -359,7 +393,25 @@ export default function EventStep({
               </p>
             </>
           )}
+
+          <div className="mt-5">
+            <ProgramDurationField
+              start={form.program_start_time}
+              end={form.program_end_time}
+              error={fieldErrors.program}
+              onChange={updateProgram}
+            />
+          </div>
         </div>
+
+        <EventTaxFields
+          taxMode={form.tax_mode || 'inherit'}
+          taxRate={form.tax_rate || ''}
+          hsnCode={form.hsn_code || ''}
+          pricesIncludeTax={Boolean(form.prices_include_tax)}
+          errors={fieldErrors}
+          onChange={update}
+        />
       </form>
     </StepShell>
   )

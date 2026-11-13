@@ -45,6 +45,7 @@ const NAVS = {
     roleLabel: 'Tenant admin',
     items: [
       { to: '/tenant', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/tenant/manual-tickets', label: 'Ticketing', icon: TicketPlus },
       { to: '/tenant/events?view=grid', label: 'Events', icon: CalendarDays },
       {
         id: 'configuration',
@@ -79,7 +80,6 @@ const NAVS = {
         children: [
           { to: '/tenant/tax-master', label: 'Tax master', icon: Percent },
           { to: '/tenant/ticket-print', label: 'Ticket print', icon: Printer },
-          { to: '/tenant/manual-tickets', label: 'Manual ticket', icon: TicketPlus },
         ],
       },
     ],
@@ -100,7 +100,7 @@ const TITLES = {
   '/tenant/tax-master': 'Tax master',
   '/tenant/sales': 'Sales',
   '/tenant/tickets': 'Tickets',
-  '/tenant/manual-tickets': 'Manual ticket',
+  '/tenant/ticketing': 'Ticketing',
   '/tenant/reports': 'Overview',
   '/tenant/reports/staff': 'Staff report',
   '/tenant/audit': 'Audit log',
@@ -131,7 +131,7 @@ export default function AppShell({ children }) {
 
   const isTenant = session?.role === 'tenant_admin'
 
-  const initial = (session?.username || '?').charAt(0).toUpperCase()
+  const initial = session?.username?.charAt(0).toUpperCase() ?? '?'
   // The soft green wash is a dashboard-only treatment; every other page sits on the plain canvas.
   const isDashboard = pathname === '/tenant' || pathname === '/platform'
 
