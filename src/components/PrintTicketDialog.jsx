@@ -53,18 +53,17 @@ export default function PrintTicketDialog({ ticketId, open, onOpenChange }) {
             {ticket.event.venue ? (
               <p className="text-[11.5px] text-muted-foreground">{ticket.event.venue}</p>
             ) : null}
-            <p className="mt-1 text-[11.5px] text-muted-foreground">
-              {new Date(ticket.event.start_at).toLocaleString()}
-            </p>
+            {ticket.event.end_at ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Valid {new Date(ticket.event.start_at).toLocaleString()} –{' '}
+                {new Date(ticket.event.end_at).toLocaleString()}
+              </p>
+            ) : null}
 
             <p className="mt-3 text-[13px] font-semibold">{ticket.category}</p>
-            <p className="mt-2 break-all font-mono text-[11px] leading-relaxed">{ticket.ticket_code}</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Seq #{ticket.sequence_number} · {ticket.issued_at_local}
-            </p>
 
             {ticket.unit_price ? (
-              <div className="mt-2.5 space-y-0.5 text-[11.5px]">
+              <div className="mt-1 space-y-0.5 text-[11.5px]">
                 <p>
                   {ticket.currency} {ticket.unit_price} × {ticket.quantity}
                 </p>
@@ -77,14 +76,20 @@ export default function PrintTicketDialog({ ticketId, open, onOpenChange }) {
                 {ticket.hsn_code ? (
                   <p className="text-muted-foreground">HSN {ticket.hsn_code}</p>
                 ) : null}
-                <p className="font-bold">
+                <p className="mt-1 text-[13px] font-bold">
                   Total {ticket.currency} {ticket.total}
                 </p>
               </div>
             ) : null}
 
+            <p className="mt-2 text-[11px] text-muted-foreground">Issued {ticket.issued_at_local}</p>
+
             <div className="my-2.5 border-t border-dashed" />
             {print.footer ? <p className="text-[11.5px] font-semibold">{print.footer}</p> : null}
+            <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              Ticket no.
+            </p>
+            <p className="break-all font-mono text-[11px] leading-relaxed">{ticket.ticket_code}</p>
           </div>
         ) : null}
 

@@ -1,20 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Plus, Printer, Trash2 } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { CheckCircle2, Plus, Printer, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { api } from '@/api'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { PageHead, RefreshButton } from '@/components/ui/page'
+import { PageHead } from '@/components/ui/page'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import PrintTicketDialog from '@/components/PrintTicketDialog'
 import { getSession } from '@/session'
 
 const MAX_PER_CATEGORY = 100
-const HISTORY_PAGE_SIZE = 20
-// Sentinel for the logged-in admin as the ticket holder. A real holder is a
-// staff id; this one is sent to the API as `staff: null`.
 const SELF = '__self__'
 
 async function fetchAll(path) {
@@ -41,35 +38,56 @@ function blankRow() {
   return { uid: `${Date.now()}-${Math.random().toString(16).slice(2)}`, category: '', quantity: 1 }
 }
 
-function DateFilter({ label, value, min, max, onChange }) {
+function round2(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100
+}
+
+function money(value) {
+  return round2(value).toFixed(2)
+}
+
+function resolveTax(event, setting) {
+  const mode = event?.tax_mode || 'inherit'
+  if (mode === 'disabled') return null
+  if (mode === 'event') {
+    const rate = Number(event?.tax_rate || 0)
+    if (!(rate > 0)) return null
+    return { rate, inclusive: Boolean(event?.prices_include_tax), label: 'Event tax' }
+  }
+  if (!setting || !setting.configured || !setting.enabled) return null
+  const rate = Number(setting.rate || 0)
+  if (!(rate > 0)) return null
+  return {
+    rate,
+    inclusive: Boolean(setting.prices_include_tax),
+    label: setting.code || setting.name || 'Tax',
+  }
+}
+
+function lineTotals(amount, quantity, tax) {
+  const gross = round2(Number(amount) * quantity)
+  if (!tax) return { base: gross, tax: 0, total: gross }
+  if (tax.inclusive) {
+    const taxAmount = round2(gross - gross / (1 + tax.rate / 100))
+    return { base: round2(gross - taxAmount), tax: taxAmount, total: gross }
+  }
+  const taxAmount = round2((gross * tax.rate) / 100)
+  return { base: gross, tax: taxAmount, total: round2(gross + taxAmount) }
+}
+
+function BillRow({ label, value, muted, strong }) {
   return (
-    <label className="space-y-1">
-      <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
-      <input
-        type="date"
-        value={value}
-        min={min}
-        max={max}
-        onChange={(event) => onChange(event.target.value)}
-        aria-label={`${label} date`}
-        className="h-9 w-[172px] rounded-md border border-transparent bg-muted pl-3 pr-1.5 text-[13px] text-foreground outline-none transition-[border-color,box-shadow] focus-visible:border-[#72c9ad] focus-visible:ring-4 focus-visible:ring-ring/25 [&::-webkit-calendar-picker-indicator]:m-0 [&::-webkit-calendar-picker-indicator]:h-[15px] [&::-webkit-calendar-picker-indicator]:w-[15px] [&::-webkit-calendar-picker-indicator]:shrink-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
-      />
-    </label>
+    <div
+      className={[
+        'flex items-center justify-between gap-3',
+        strong ? 'text-[15px] font-extrabold' : 'text-[13px]',
+        muted ? 'text-muted-foreground' : '',
+      ].join(' ')}
+    >
+      <span>{label}</span>
+      <span className={strong ? '' : 'font-mono'}>{value}</span>
+    </div>
   )
-}
-
-function toDayString(date) {
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
-}
-
-function monthStartString() {
-  const now = new Date()
-  return toDayString(new Date(now.getFullYear(), now.getMonth(), 1))
-}
-
-function formatWhen(value) {
-  if (!value) return '—'
-  return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 export default function ManualTickets() {
@@ -81,6 +99,7 @@ export default function ManualTickets() {
   const [assignments, setAssignments] = useState([])
   const [staff, setStaff] = useState([])
   const [categories, setCategories] = useState([])
+  const [taxSetting, setTaxSetting] = useState(null)
 
   const [eventId, setEventId] = useState('')
   const [staffId, setStaffId] = useState(SELF)
@@ -93,31 +112,8 @@ export default function ManualTickets() {
   const [error, setError] = useState('')
   const [issued, setIssued] = useState(null)
 
-  const [history, setHistory] = useState([])
-  const [historyLoading, setHistoryLoading] = useState(true)
-  const [historyError, setHistoryError] = useState('')
-  const [expandedId, setExpandedId] = useState(null)
-  const [dateFrom, setDateFrom] = useState(monthStartString)
-  const [dateTo, setDateTo] = useState(() => toDayString(new Date()))
-
   const [printId, setPrintId] = useState(null)
   const keyRef = useRef(newIdempotencyKey())
-
-  const loadHistory = useCallback(async () => {
-    setHistoryLoading(true)
-    setHistoryError('')
-    const params = new URLSearchParams({ source: 'manual', page_size: String(HISTORY_PAGE_SIZE) })
-    if (dateFrom) params.set('date_from', dateFrom)
-    if (dateTo) params.set('date_to', dateTo)
-    try {
-      const data = await api.get(`/admin/sales/?${params.toString()}`)
-      setHistory(Array.isArray(data) ? data : data.results || [])
-    } catch (err) {
-      setHistoryError(err.message)
-    } finally {
-      setHistoryLoading(false)
-    }
-  }, [dateFrom, dateTo])
 
   useEffect(() => {
     let cancelled = false
@@ -128,13 +124,15 @@ export default function ManualTickets() {
       fetchAll('/admin/assignments/'),
       fetchAll('/admin/staff/'),
       fetchAll('/admin/categories/'),
+      api.get('/admin/tax-settings/').catch(() => null),
     ])
-      .then(([eventRows, assignmentRows, staffRows, categoryRows]) => {
+      .then(([eventRows, assignmentRows, staffRows, categoryRows, setting]) => {
         if (cancelled) return
         setEvents(eventRows.filter((row) => row.status === 'active'))
         setAssignments(assignmentRows.filter((row) => row.status === 'active'))
         setStaff(staffRows.filter((row) => row.status !== 'inactive'))
         setCategories(categoryRows)
+        setTaxSetting(setting)
       })
       .catch((err) => !cancelled && setLoadError(err.message))
       .finally(() => !cancelled && setLoading(false))
@@ -142,10 +140,6 @@ export default function ManualTickets() {
       cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    loadHistory()
-  }, [loadHistory])
 
   useEffect(() => {
     if (!eventId) {
@@ -171,12 +165,43 @@ export default function ManualTickets() {
     return staff.filter((row) => assigned.has(String(row.id)))
   }, [assignments, staff, eventId])
 
-  const total = rows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
+  const selectedEvent = events.find((row) => String(row.id) === String(eventId)) || null
+  const tax = useMemo(() => resolveTax(selectedEvent, taxSetting), [selectedEvent, taxSetting])
+  const currency = prices[0]?.currency || ''
+
+  const billLines = useMemo(
+    () =>
+      rows
+        .filter((row) => row.category)
+        .map((row) => {
+          const price = prices.find((entry) => String(entry.category) === String(row.category))
+          if (!price) return null
+          const quantity = Number(row.quantity) || 0
+          return {
+            uid: row.uid,
+            price,
+            quantity,
+            ...lineTotals(price.amount, quantity, tax),
+          }
+        })
+        .filter(Boolean),
+    [rows, prices, tax],
+  )
+
+  const lineByUid = useMemo(
+    () => Object.fromEntries(billLines.map((line) => [line.uid, line])),
+    [billLines],
+  )
+  const subtotal = round2(billLines.reduce((sum, line) => sum + line.base, 0))
+  const taxTotal = round2(billLines.reduce((sum, line) => sum + line.tax, 0))
+  const grandTotal = round2(billLines.reduce((sum, line) => sum + line.total, 0))
+  const total = billLines.reduce((sum, line) => sum + line.quantity, 0)
   const usedCategoryIds = rows.map((row) => String(row.category)).filter(Boolean)
 
   function categoryLabel(price) {
     const match = categories.find((category) => String(category.id) === String(price.category))
-    return match ? `${match.name} · ${price.category_code}` : price.category_code
+    const name = match ? `${match.name} · ${price.category_code}` : price.category_code
+    return `${name} — ${price.currency} ${price.amount}`
   }
 
   function changeEvent(value) {
@@ -192,6 +217,12 @@ export default function ManualTickets() {
 
   function removeRow(uid) {
     setRows((current) => (current.length === 1 ? [blankRow()] : current.filter((row) => row.uid !== uid)))
+  }
+
+  function resetAfterSuccess() {
+    setIssued(null)
+    setRows([blankRow()])
+    setError('')
   }
 
   async function handleSubmit(submitEvent) {
@@ -216,7 +247,6 @@ export default function ManualTickets() {
     try {
       const result = await api.post('/admin/tickets/manual/', {
         event: Number(eventId),
-        // null tells the API to issue as the logged-in admin (no assignment).
         staff: staffId === SELF ? null : Number(staffId),
         items,
         idempotency_key: keyRef.current,
@@ -224,7 +254,6 @@ export default function ManualTickets() {
       setIssued(result)
       keyRef.current = newIdempotencyKey()
       setRows([blankRow()])
-      loadHistory()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -232,31 +261,115 @@ export default function ManualTickets() {
     }
   }
 
+  if (issued) {
+    const issuedCurrency = issued.currency || currency
+    const tickets = issued.tickets || []
+    const ticketCount = tickets.length
+    const lastTicket = tickets.reduce(
+      (latest, ticket) =>
+        !latest || Number(ticket.sequence_number) > Number(latest.sequence_number) ? ticket : latest,
+      null,
+    )
+    return (
+      <>
+        <PageHead eyebrow="MANUAL TICKETS" title="Tickets issued" />
+
+        <div className="mx-auto max-w-5xl space-y-5">
+          <div className="rounded-lg border-[1.5px] border-emerald-200 bg-emerald-50 p-5">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
+              <div className="min-w-0">
+                <h2 className="font-display text-[17px] font-extrabold tracking-[-0.01em]">
+                  {ticketCount} ticket{ticketCount === 1 ? '' : 's'} issued
+                </h2>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  {issued.event_code} · {issued.staff_name || issued.staff_code} · Sale{' '}
+                  <span className="font-mono">{issued.sale_reference}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Sale</p>
+                <p className="font-mono text-[13px] font-semibold">{issued.sale_reference}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Sale ID</p>
+                <p className="font-mono text-[13px] font-semibold">#{issued.id}</p>
+              </div>
+            </div>
+
+            <ul className="mt-4 divide-y divide-border">
+              {(issued.items || []).map((item) => (
+                <li key={item.id} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+                  <span className="min-w-0">
+                    <span className="block font-semibold">
+                      {item.category_name || item.category_code} × {item.quantity}
+                    </span>
+                    <span className="block text-[11.5px] text-muted-foreground">
+                      {issuedCurrency} {item.unit_price_snapshot} each
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-mono font-semibold">
+                    {issuedCurrency} {money(item.line_total)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-2 space-y-1.5 border-t border-border pt-3">
+              <BillRow label="Subtotal" value={`${issuedCurrency} ${money(issued.gross_total)}`} muted />
+              {Number(issued.tax_total) > 0 ? (
+                <BillRow label="Tax" value={`${issuedCurrency} ${money(issued.tax_total)}`} muted />
+              ) : null}
+              <BillRow label="Total" value={`${issuedCurrency} ${money(issued.total_payable)}`} strong />
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-dashed border-border pt-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                  Last ticket no.
+                </p>
+                <p className="break-all font-mono text-[12px] font-semibold">{lastTicket?.ticket_code || '—'}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => lastTicket && setPrintId(lastTicket.id)}
+                disabled={!lastTicket}
+              >
+                <Printer className="h-4 w-4" /> Preview / print
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={resetAfterSuccess}>Issue more tickets</Button>
+          </div>
+        </div>
+
+        <PrintTicketDialog ticketId={printId} open={!!printId} onOpenChange={(value) => !value && setPrintId(null)} />
+      </>
+    )
+  }
+
   return (
     <>
       <PageHead
         eyebrow="MANUAL TICKETS"
         title="Manual ticket"
-        subtitle="Issue manual tickets as yourself or on behalf of assigned staff. They charge the configured price, are taxed like POS sales, and count as revenue."
-      >
-        <RefreshButton loading={historyLoading} onClick={loadHistory} />
-      </PageHead>
+        subtitle="Issue manual tickets as yourself or on behalf of assigned staff. The price and tax are charged like a POS sale."
+      />
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,430px)_minmax(0,1fr)]">
-        <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-card p-5 shadow-sm">
-          <div className="space-y-4">
-            {loadError ? <Alert variant="error">{loadError}</Alert> : null}
-            {error ? <Alert variant="error">{error}</Alert> : null}
+      <form onSubmit={handleSubmit} className="mx-auto max-w-5xl space-y-5">
+        {loadError ? <Alert variant="error">{loadError}</Alert> : null}
+        {error ? <Alert variant="error">{error}</Alert> : null}
 
-            {issued ? (
-              <Alert variant="success">
-                <span>
-                  {issued.tickets?.length || 0} ticket{(issued.tickets?.length || 0) === 1 ? '' : 's'} issued for{' '}
-                  {issued.event_code} under <strong className="font-mono">{issued.sale_reference}</strong>.
-                </span>
-              </Alert>
-            ) : null}
-
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Event" hint="Only active events can issue tickets.">
               <Select value={eventId} onValueChange={changeEvent} disabled={loading}>
                 <SelectTrigger className="w-full">
@@ -271,17 +384,6 @@ export default function ManualTickets() {
                 </SelectContent>
               </Select>
             </Field>
-
-            {eventId && !pricesLoading && prices.length === 0 ? (
-              <Alert variant="error">
-                <span>
-                  This event has no active prices, so tickets cannot be issued.{' '}
-                  <Link to="/tenant/prices" className="font-semibold underline">
-                    Add prices
-                  </Link>
-                </span>
-              </Alert>
-            ) : null}
 
             <Field
               label="Tickets belong to"
@@ -301,56 +403,85 @@ export default function ManualTickets() {
                 </SelectContent>
               </Select>
             </Field>
+          </div>
 
-            {eventId && staffOptions.length === 0 && !loading ? (
-              <p className="text-xs text-muted-foreground">
-                No staff is assigned to this event, so only <strong>Me ({adminLabel})</strong> is
-                available. To issue on a staff member&apos;s behalf,{' '}
-                <Link to="/tenant/assignments" className="font-semibold text-primary underline">
-                  open Assignments
+          {eventId && !pricesLoading && prices.length === 0 ? (
+            <Alert variant="error" className="mt-4">
+              <span>
+                This event has no active prices, so tickets cannot be issued.{' '}
+                <Link to="/tenant/prices" className="font-semibold underline">
+                  Add prices
                 </Link>
-                .
-              </p>
-            ) : null}
+              </span>
+            </Alert>
+          ) : null}
 
-            <div className="space-y-3 border-t border-border pt-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Ticket categories</p>
+          {eventId && staffOptions.length === 0 && !loading ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              No staff is assigned to this event, so only <strong>Me ({adminLabel})</strong> is available. To issue
+              on a staff member&apos;s behalf,{' '}
+              <Link to="/tenant/assignments" className="font-semibold text-primary underline">
+                open Assignments
+              </Link>
+              .
+            </p>
+          ) : null}
+        </div>
 
-              {rows.map((row) => (
-                <div key={row.uid} className="flex items-end gap-2">
-                  <div className="min-w-0 flex-1">
-                    <Select
-                      value={row.category}
-                      onValueChange={(value) => updateRow(row.uid, { category: value })}
-                      disabled={!eventId || prices.length === 0}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={pricesLoading ? 'Loading…' : 'Category'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {prices
-                          .filter(
-                            (price) =>
-                              !usedCategoryIds.includes(String(price.category)) ||
-                              String(price.category) === String(row.category),
-                          )
-                          .map((price) => (
-                            <SelectItem key={price.id} value={String(price.category)}>
-                              {categoryLabel(price)}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <div className="mb-3 grid grid-cols-[minmax(0,1fr)_84px_120px_36px] items-end gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Category</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Qty</p>
+            <p className="text-right text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Amount</p>
+            <span />
+          </div>
+
+          <div className="space-y-3">
+            {rows.map((row) => {
+              const line = lineByUid[row.uid]
+              return (
+                <div key={row.uid} className="grid grid-cols-[minmax(0,1fr)_84px_120px_36px] items-center gap-2">
+                  <Select
+                    value={row.category}
+                    onValueChange={(value) => updateRow(row.uid, { category: value })}
+                    disabled={!eventId || prices.length === 0}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={pricesLoading ? 'Loading…' : 'Choose a category'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {prices
+                        .filter(
+                          (price) =>
+                            !usedCategoryIds.includes(String(price.category)) ||
+                            String(price.category) === String(row.category),
+                        )
+                        .map((price) => (
+                          <SelectItem key={price.id} value={String(price.category)}>
+                            {categoryLabel(price)}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+
                   <Input
                     type="number"
                     min="1"
                     max={MAX_PER_CATEGORY}
                     value={row.quantity}
                     onChange={(e) => updateRow(row.uid, { quantity: e.target.value })}
-                    className="w-24"
                     aria-label="Quantity"
                   />
+
+                  <div className="text-right">
+                    <p className="font-mono text-[13px] font-semibold">
+                      {line ? `${currency} ${money(line.total)}` : '—'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {line ? `${currency} ${money(line.price.amount)} each` : ''}
+                    </p>
+                  </div>
+
                   <Button
                     type="button"
                     variant="ghost"
@@ -361,121 +492,51 @@ export default function ManualTickets() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-              ))}
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setRows((current) => [...current, blankRow()])}
-                  disabled={!eventId || usedCategoryIds.length >= prices.length}
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add category
-                </Button>
-                <p className="text-xs text-muted-foreground">{total} ticket{total === 1 ? '' : 's'}</p>
-              </div>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={busy || !eventId || !staffId || total === 0}>
-              {busy ? 'Issuing…' : `Issue ${total} ticket${total === 1 ? '' : 's'}`}
-            </Button>
+              )
+            })}
           </div>
-        </form>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setRows((current) => [...current, blankRow()])}
+              disabled={!eventId || usedCategoryIds.length >= prices.length}
+            >
+              <Plus className="h-3.5 w-3.5" /> Add category
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              {total} ticket{total === 1 ? '' : 's'}
+            </p>
+          </div>
+        </div>
 
         <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="font-display text-[15px] font-extrabold tracking-[-0.01em]">Manual tickets issued</h2>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">Manual entries only — POS sales are on the Sales page.</p>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <DateFilter
-                label="From"
-                value={dateFrom}
-                max={dateTo || undefined}
-                onChange={setDateFrom}
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Billing</h3>
+          <div className="mt-3 space-y-1.5">
+            <BillRow label="Subtotal" value={`${currency} ${money(subtotal)}`} muted />
+            {tax ? (
+              <BillRow
+                label={`${tax.label} (${tax.rate}%)${tax.inclusive ? ' incl.' : ''}`}
+                value={`${currency} ${money(taxTotal)}`}
+                muted
               />
-              <DateFilter label="To" value={dateTo} min={dateFrom || undefined} onChange={setDateTo} />
-              {dateFrom || dateTo ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setDateFrom('')
-                    setDateTo('')
-                  }}
-                >
-                  Clear
-                </Button>
-              ) : null}
+            ) : null}
+            <div className="border-t border-border pt-2">
+              <BillRow label="Total" value={`${currency} ${money(grandTotal)}`} strong />
             </div>
           </div>
-
-          {historyError ? <Alert variant="error">{historyError}</Alert> : null}
-
-          {historyLoading && history.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
-          ) : history.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {dateFrom || dateTo
-                ? 'No manual tickets were issued in this date range.'
-                : 'Nothing issued yet. Manual tickets you create will be listed here.'}
-            </p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {history.map((sale) => {
-                const expanded = expandedId === sale.id
-                return (
-                  <li key={sale.id} className="py-3">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedId(expanded ? null : sale.id)}
-                      className="flex w-full items-start gap-3 text-left"
-                    >
-                      <span className="mt-0.5 text-muted-foreground">
-                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-mono text-[12.5px] font-semibold">{sale.sale_reference}</span>
-                        <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
-                          {sale.event_code} · {sale.staff_name || sale.staff_code} · {formatWhen(sale.created_at)}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-right">
-                        <span className="block text-[13px] font-semibold">
-                          {(sale.tickets || []).length} ticket{(sale.tickets || []).length === 1 ? '' : 's'}
-                        </span>
-                        <span className="block font-mono text-[11.5px] text-muted-foreground">
-                          {sale.currency} {sale.total_payable}
-                        </span>
-                      </span>
-                    </button>
-
-                    {expanded ? (
-                      <ul className="mt-2 space-y-1.5 pl-7">
-                        {(sale.tickets || []).map((ticket) => (
-                          <li key={ticket.id} className="flex items-center justify-between gap-3">
-                            <span className="min-w-0 break-all font-mono text-[11.5px] text-muted-foreground">
-                              {ticket.ticket_code}
-                            </span>
-                            <Button variant="ghost" size="sm" onClick={() => setPrintId(ticket.id)}>
-                              <Printer className="h-3.5 w-3.5" /> Print
-                            </Button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
         </div>
-      </div>
 
-      <PrintTicketDialog ticketId={printId} open={!!printId} onOpenChange={(value) => !value && setPrintId(null)} />
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={busy || !eventId || !staffId || total === 0}
+        >
+          {busy ? 'Issuing…' : `Confirm & issue ${total} ticket${total === 1 ? '' : 's'}${currency ? ` · ${currency} ${money(grandTotal)}` : ''}`}
+        </Button>
+      </form>
     </>
   )
 }
