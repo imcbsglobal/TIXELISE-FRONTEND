@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, Plus, Printer, Trash2 } from 'lucide-react'
+import { CheckCircle2, Printer, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { api } from '@/api'
 import { Alert } from '@/components/ui/alert'
@@ -536,16 +536,7 @@ export default function ManualTickets() {
             })}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setRows((current) => [...current, blankRow()])}
-              disabled={!eventId || usedCategoryIds.length >= prices.length}
-            >
-              <Plus className="h-3.5 w-3.5" /> Add category
-            </Button>
+          <div className="mt-4 flex justify-end">
             <p className="text-xs text-muted-foreground">
               {total} ticket{total === 1 ? '' : 's'}
             </p>

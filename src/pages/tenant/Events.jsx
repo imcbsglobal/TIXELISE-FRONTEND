@@ -50,7 +50,7 @@ const EMPTY_FORM = {
   sales_end_at: '',
   program_start_time: '',
   program_end_time: '',
-  tax_mode: 'inherit',
+  tax_mode: 'event',
   tax_rate: '',
   hsn_code: '',
   prices_include_tax: false,
