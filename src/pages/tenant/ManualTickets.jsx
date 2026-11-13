@@ -9,9 +9,13 @@ import { Input } from '@/components/ui/input'
 import { PageHead, RefreshButton } from '@/components/ui/page'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import PrintTicketDialog from '@/components/PrintTicketDialog'
+import { getSession } from '@/session'
 
 const MAX_PER_CATEGORY = 100
 const HISTORY_PAGE_SIZE = 20
+// Sentinel for the logged-in admin as the ticket holder. A real holder is a
+// staff id; this one is sent to the API as `staff: null`.
+const SELF = '__self__'
 
 async function fetchAll(path) {
   const rows = []
@@ -69,6 +73,8 @@ function formatWhen(value) {
 }
 
 export default function ManualTickets() {
+  const session = getSession()
+  const adminLabel = session?.username || 'admin'
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [events, setEvents] = useState([])
@@ -77,7 +83,7 @@ export default function ManualTickets() {
   const [categories, setCategories] = useState([])
 
   const [eventId, setEventId] = useState('')
-  const [staffId, setStaffId] = useState('')
+  const [staffId, setStaffId] = useState(SELF)
   const [rows, setRows] = useState([blankRow()])
 
   const [prices, setPrices] = useState([])
@@ -175,7 +181,7 @@ export default function ManualTickets() {
 
   function changeEvent(value) {
     setEventId(value)
-    setStaffId('')
+    setStaffId(SELF)
     setRows([blankRow()])
     setError('')
   }
@@ -197,7 +203,7 @@ export default function ManualTickets() {
       .map((row) => ({ category: Number(row.category), quantity: Number(row.quantity) }))
 
     if (!eventId) return setError('Choose an event first.')
-    if (!staffId) return setError('Choose the staff member these tickets belong to.')
+    if (!staffId) return setError('Choose who these tickets belong to.')
     if (items.length === 0) return setError('Add at least one ticket category.')
     if (items.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > MAX_PER_CATEGORY)) {
       return setError(`Quantity must be between 1 and ${MAX_PER_CATEGORY} for each category.`)
@@ -210,7 +216,8 @@ export default function ManualTickets() {
     try {
       const result = await api.post('/admin/tickets/manual/', {
         event: Number(eventId),
-        staff: Number(staffId),
+        // null tells the API to issue as the logged-in admin (no assignment).
+        staff: staffId === SELF ? null : Number(staffId),
         items,
         idempotency_key: keyRef.current,
       })
@@ -230,7 +237,7 @@ export default function ManualTickets() {
       <PageHead
         eyebrow="MANUAL TICKETS"
         title="Manual ticket"
-        subtitle="Issue complimentary tickets to staff. They print and reprint like normal tickets but never count as revenue."
+        subtitle="Issue complimentary tickets as yourself or on behalf of assigned staff. They print and reprint like normal tickets but never count as revenue."
       >
         <RefreshButton loading={historyLoading} onClick={loadHistory} />
       </PageHead>
@@ -276,20 +283,16 @@ export default function ManualTickets() {
               </Alert>
             ) : null}
 
-            <Field label="Tickets belong to" hint="Only staff assigned to this event can hold its tickets.">
-              <Select value={staffId} onValueChange={setStaffId} disabled={!eventId || staffOptions.length === 0}>
+            <Field
+              label="Tickets belong to"
+              hint="Issue as yourself, or on behalf of a staff member assigned to this event."
+            >
+              <Select value={staffId} onValueChange={setStaffId} disabled={!eventId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue
-                    placeholder={
-                      !eventId
-                        ? 'Choose an event first'
-                        : staffOptions.length === 0
-                          ? 'No staff assigned to this event'
-                          : 'Choose a staff member'
-                    }
-                  />
+                  <SelectValue placeholder={!eventId ? 'Choose an event first' : 'Choose a holder'} />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={SELF}>Me ({adminLabel})</SelectItem>
                   {staffOptions.map((member) => (
                     <SelectItem key={member.id} value={String(member.id)}>
                       {member.display_name} ({member.staff_code})
@@ -301,7 +304,8 @@ export default function ManualTickets() {
 
             {eventId && staffOptions.length === 0 && !loading ? (
               <p className="text-xs text-muted-foreground">
-                Assign someone to this event first —{' '}
+                No staff is assigned to this event, so only <strong>Me ({adminLabel})</strong> is
+                available. To issue on a staff member&apos;s behalf,{' '}
                 <Link to="/tenant/assignments" className="font-semibold text-primary underline">
                   open Assignments
                 </Link>
