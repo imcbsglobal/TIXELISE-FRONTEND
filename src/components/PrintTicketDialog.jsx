@@ -4,7 +4,7 @@ import { api } from '@/api'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { formatProgramWindow } from '@/lib/time'
+import TicketSlip from '@/components/TicketSlip'
 
 /**
  * Renders one ticket as an 80mm-style receipt using the tenant's print
@@ -45,58 +45,7 @@ export default function PrintTicketDialog({ ticketId, open, onOpenChange }) {
         {error ? <Alert variant="error">{error}</Alert> : null}
         {loading && !data ? <p className="text-sm text-muted-foreground">Loading ticket…</p> : null}
 
-        {ticket && print ? (
-          <div className="print-sheet mx-auto w-[302px] rounded-md border border-dashed p-4 text-center">
-            <p className="text-[13px] font-extrabold uppercase leading-snug tracking-wide">{print.header}</p>
-            <div className="my-2.5 border-t border-dashed" />
-
-            <p className="text-[15px] font-bold leading-snug">{ticket.event.name}</p>
-            {ticket.event.venue ? (
-              <p className="text-[11.5px] text-muted-foreground">{ticket.event.venue}</p>
-            ) : null}
-            {ticket.event.program_start_time && ticket.event.program_end_time ? (
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Valid {formatProgramWindow(ticket.event.program_start_time, ticket.event.program_end_time)}
-              </p>
-            ) : ticket.event.end_at ? (
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Valid {new Date(ticket.event.start_at).toLocaleString()} –{' '}
-                {new Date(ticket.event.end_at).toLocaleString()}
-              </p>
-            ) : null}
-
-            <p className="mt-3 text-[13px] font-semibold">{ticket.category}</p>
-
-            {ticket.unit_price ? (
-              <div className="mt-1 space-y-0.5 text-[11.5px]">
-                <p>
-                  {ticket.currency} {ticket.unit_price} × {ticket.quantity}
-                </p>
-                {Number(ticket.tax_rate) > 0 ? (
-                  <p className="text-muted-foreground">
-                    Tax {ticket.tax_code ? `${ticket.tax_code} ` : ''}
-                    {ticket.tax_rate}%: {ticket.tax_amount}
-                  </p>
-                ) : null}
-                {ticket.hsn_code ? (
-                  <p className="text-muted-foreground">HSN {ticket.hsn_code}</p>
-                ) : null}
-                <p className="mt-1 text-[13px] font-bold">
-                  Total {ticket.currency} {ticket.total}
-                </p>
-              </div>
-            ) : null}
-
-            <p className="mt-2 text-[11px] text-muted-foreground">Issued {ticket.issued_at_local}</p>
-
-            <div className="my-2.5 border-t border-dashed" />
-            {print.footer ? <p className="text-[11.5px] font-semibold">{print.footer}</p> : null}
-            <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-              Ticket no.
-            </p>
-            <p className="break-all font-mono text-[11px] leading-relaxed">{ticket.ticket_code}</p>
-          </div>
-        ) : null}
+        {ticket && print ? <TicketSlip ticket={ticket} print={print} /> : null}
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

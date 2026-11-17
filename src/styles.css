@@ -43,7 +43,8 @@ input::placeholder { color: #7f8da5; opacity: 1; }
 /* ---------- ticket printing: only .print-sheet reaches the paper ---------- */
 @media print {
   body * { visibility: hidden !important; }
-  .print-sheet, .print-sheet * { visibility: visible !important; }
+  .print-sheet, .print-sheet *,
+  .print-stack, .print-stack * { visibility: visible !important; }
   .print-sheet {
     position: fixed;
     left: 0;
@@ -55,6 +56,34 @@ input::placeholder { color: #7f8da5; opacity: 1; }
     border-radius: 0 !important;
     background: #fff;
     color: #000;
+  }
+  .print-stack {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+  }
+  .print-stack .print-slip-list { display: block !important; }
+  .print-stack .print-slip {
+    position: static;
+    width: 72mm;
+    margin: 0 auto;
+    padding: 3mm;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff;
+    color: #000;
+    page-break-after: always;
+    break-after: page;
+  }
+  .print-stack > section:last-child .print-slip:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .print-stack .print-group-heading {
+    margin-bottom: 2mm;
+    page-break-after: avoid;
+    break-after: avoid;
   }
   @page { margin: 3mm; }
 }

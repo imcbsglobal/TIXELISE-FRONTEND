@@ -79,6 +79,22 @@ export default function Login() {
           <form onSubmit={handleSubmit}>
             {error && <p className="form-alert" role="alert">{error}</p>}
 
+            {!isPlatformLogin && (
+              <div className="tenant-field">
+                <label className="input-shell">
+                  <span className="sr-only">Tenant code</span>
+                  <BuildingIcon />
+                  <input
+                    type="text"
+                    placeholder="Tenant code (platform admins: leave empty)"
+                    autoComplete="organization"
+                    value={tenantCode}
+                    onChange={(e) => setTenantCode(e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
+
             <label className="input-shell">
               <span className="sr-only">Username</span>
               <MailIcon />
@@ -107,22 +123,6 @@ export default function Login() {
                 <EyeIcon />
               </button>
             </label>
-
-            {!isPlatformLogin && (
-              <div className="tenant-field">
-                <label className="input-shell">
-                  <span className="sr-only">Tenant code</span>
-                  <BuildingIcon />
-                  <input
-                    type="text"
-                    placeholder="Tenant code (platform admins: leave empty)"
-                    autoComplete="organization"
-                    value={tenantCode}
-                    onChange={(e) => setTenantCode(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
 
             {isPlatformLogin && (
               <p className="signup-copy" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
