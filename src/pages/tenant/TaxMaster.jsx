@@ -33,8 +33,8 @@ const BASE = '/admin/tax-master/'
 const PAGE_SIZE = 20
 
 const SCHEMES = [
-  { value: 'india', label: 'India (GST)', note: 'Separate CGST, SGST, IGST and GST rates.' },
-  { value: 'other', label: 'Other countries', note: 'One flat rate, such as VAT or sales tax.' },
+  { value: 'india', label: 'India (GST)' },
+  { value: 'other', label: 'Other countries' },
 ]
 
 // [key, label, max length, required, hint]
@@ -205,7 +205,7 @@ function buildPayload(scheme, form) {
   return payload
 }
 
-function TaxForm({ scheme, record, clientId, submitLabel, onSubmit, onBack, onCancel, busy, error }) {
+function TaxForm({ scheme, record, clientId, submitLabel, onSubmit, onCancel, busy, error }) {
   const [form, setForm] = useState(() => (record ? fromRecord(scheme, record) : blankForm(scheme)))
   const [errors, setErrors] = useState({})
 
@@ -266,7 +266,9 @@ function TaxForm({ scheme, record, clientId, submitLabel, onSubmit, onBack, onCa
           maxLength={maximum}
           readOnly={isCode}
           tabIndex={isCode ? -1 : undefined}
-          placeholder={isCode ? 'Auto from name' : undefined}
+          placeholder={
+            isCode ? 'Auto from name' : key === 'name' ? 'e.g. GST 18%' : key === 'type' ? 'e.g. GST' : undefined
+          }
           className={isCode ? 'font-mono cursor-default' : undefined}
           onChange={isCode ? undefined : (event) => setField(key, event.target.value)}
         />
@@ -288,11 +290,6 @@ function TaxForm({ scheme, record, clientId, submitLabel, onSubmit, onBack, onCa
       </div>
 
       <div className="flex items-center justify-end gap-2.5">
-        {onBack ? (
-          <Button type="button" variant="ghost" onClick={onBack} disabled={busy}>
-            Back
-          </Button>
-        ) : null}
         {onCancel ? (
           <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
             Cancel
@@ -308,6 +305,7 @@ function TaxForm({ scheme, record, clientId, submitLabel, onSubmit, onBack, onCa
 
 export default function TaxMaster() {
   const [clientId, setClientId] = useState('')
+  const [suggestedKind, setSuggestedKind] = useState('other')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -325,11 +323,7 @@ export default function TaxMaster() {
   // can never repeat that call.
   const autoSelected = useRef(false)
 
-  // 'choose' is the first step of creating - which list this record belongs to.
-  // Editing skips it, because a record's list is already decided and moving one
-  // between lists would mean deleting and recreating it.
   const [formOpen, setFormOpen] = useState(false)
-  const [step, setStep] = useState('choose')
   const [formScheme, setFormScheme] = useState('india')
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -358,6 +352,8 @@ export default function TaxMaster() {
           ...withScheme(other?.results, 'other'),
         ]
         setClientId(india?.client_id || other?.client_id || '')
+        const suggested = india?.suggested_kind || other?.suggested_kind
+        setSuggestedKind(suggested === 'india' ? 'india' : 'other')
         setRows(merged)
         setTaxSetting(applied)
         setPage(1)
@@ -474,7 +470,7 @@ export default function TaxMaster() {
   function openCreate() {
     setEditing(null)
     setFormError('')
-    setStep('choose')
+    setFormScheme(suggestedKind)
     setFormOpen(true)
   }
 
@@ -482,13 +478,7 @@ export default function TaxMaster() {
     setEditing(record)
     setFormError('')
     setFormScheme(record.scheme)
-    setStep('form')
     setFormOpen(true)
-  }
-
-  function chooseScheme(scheme) {
-    setFormScheme(scheme)
-    setStep('form')
   }
 
   async function handleSubmit(payload) {
@@ -532,15 +522,9 @@ export default function TaxMaster() {
     <>
       <PageHead eyebrow="CENTRAL MASTER" title="Tax master">
         <RefreshButton loading={loading} onClick={reload} />
-        {/* One record per list, the same convention as Company: once anything is
-            held the create option disappears and the table's Edit is the way in.
-            Judged on `rows`, not the searched view, so clearing the search box
-            cannot bring the button back. */}
-        {rows.length === 0 && (
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> New tax record
-          </Button>
-        )}
+        <Button onClick={openCreate} disabled={loading}>
+          <Plus className="h-4 w-4" /> New tax record
+        </Button>
       </PageHead>
 
       {error && <Alert variant="error" className="mb-5">{error}</Alert>}
@@ -718,58 +702,26 @@ export default function TaxMaster() {
       </Card>
 
       <Dialog open={formOpen} onOpenChange={(open) => (open ? null : closeForm())}>
-        <DialogContent>
+        <DialogContent className="creation-dialog-content">
           <DialogHeader>
             <DialogTitle>
               {editing
                 ? `Tax ${editing.code}`
-                : step === 'choose'
-                  ? 'New tax record'
-                  : `New ${schemeLabel(formScheme)} tax record`}
+                : `New ${schemeLabel(formScheme)} tax record`}
             </DialogTitle>
           </DialogHeader>
 
-          {step === 'choose' ? (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Which tax list should this record go into? The two hold different fields, and a
-                record cannot be moved between them later.
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {SCHEMES.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => chooseScheme(item.value)}
-                    className="rounded-[14px] border border-input bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30"
-                  >
-                    <span className="block text-[15px] font-semibold">{item.label}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">{item.note}</span>
-                  </button>
-                ))}
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={closeForm}>
-                  Cancel
-                </Button>
-              </DialogFooter>
-            </div>
-          ) : (
-            // key remounts the form per record and per scheme, so going back and
-            // picking the other list can never carry the first one's fields over.
-            <TaxForm
-              key={`${formScheme}-${editing?.id ?? 'new'}`}
-              scheme={formScheme}
-              record={editing}
-              clientId={clientId}
-              submitLabel={editing ? 'Save changes' : 'Create tax record'}
-              onSubmit={handleSubmit}
-              onBack={editing ? undefined : () => setStep('choose')}
-              onCancel={closeForm}
-              busy={saving}
-              error={formError}
-            />
-          )}
+          <TaxForm
+            key={`${formScheme}-${editing?.id ?? 'new'}`}
+            scheme={formScheme}
+            record={editing}
+            clientId={clientId}
+            submitLabel={editing ? 'Save changes' : 'Create tax record'}
+            onSubmit={handleSubmit}
+            onCancel={closeForm}
+            busy={saving}
+            error={formError}
+          />
         </DialogContent>
       </Dialog>
 

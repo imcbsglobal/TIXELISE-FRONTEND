@@ -282,7 +282,7 @@ export default function Staff() {
       </Card>
 
       <Dialog open={createOpen} onOpenChange={(v) => !v && closeCreate()}>
-        <DialogContent>
+        <DialogContent className="creation-dialog-content">
           <DialogHeader>
             <DialogTitle>{created ? 'Staff created' : 'New staff member'}</DialogTitle>
           </DialogHeader>
@@ -338,6 +338,7 @@ export default function Staff() {
                     type="password"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="Enter password"
                     autoComplete="new-password"
                     required
                   />

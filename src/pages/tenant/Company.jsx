@@ -12,21 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 // One company per logged-in tenant. The central master holds it; Tixelise only
 // proxies the call, so the client ID comes from the JWT, never from this form.
-// Product access is not part of this form: a new company is registered for
-// Tixelise alone (the backend default), and an edit sends no flags at all so any
-// access granted outside Tixelise is preserved. Status is left out too, so a new
-// record starts ACTIVE and an edit never re-activates one that was stopped.
+// Product flags are no longer part of this company record, and referral code is
+// optional. Status is kept but only edited when the user changes it in form.
 const ENDPOINT = '/admin/company-master/'
-
-const PRODUCTS = [
-  { key: 'trellisco', label: 'Trellisco' },
-  { key: 'claudius', label: 'Claudius' },
-  { key: 'melone', label: 'Melone' },
-  { key: 'tixelise', label: 'Tixelise' },
-  { key: 'trellisco_crm', label: 'Trellisco CRM' },
-  { key: 'melone_stay', label: 'Melone Stay' },
-  { key: 'trellisco_books', label: 'Trellisco Books' },
-]
 
 const MAX_LENGTHS = {
   company_name: 255,
@@ -41,6 +29,7 @@ const MAX_LENGTHS = {
   district: 100,
   state: 100,
   country: 100,
+  referral_code: 100,
 }
 
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp']
@@ -76,6 +65,7 @@ const DETAIL_FIELDS = [
   ['client_id', 'Client ID'],
   ...REQUIRED_FIELDS,
   ['address_line_2', 'Address line 2'],
+  ['referral_code', 'Referral code'],
   ['status', 'Status'],
 ]
 
@@ -92,6 +82,7 @@ const BLANK = {
   district: '',
   state: '',
   country: 'INDIA',
+  referral_code: '',
 }
 
 function fromCompany(company) {
@@ -112,10 +103,6 @@ function validate(form) {
     errors.email = 'Enter a valid email address.'
   }
   return errors
-}
-
-function enabledProducts(row) {
-  return PRODUCTS.filter((product) => row[product.key]).map((product) => product.label)
 }
 
 function Detail({ label, value }) {
@@ -248,6 +235,7 @@ function CompanyForm({
         {textField('phone_number', 'Phone number')}
         {textField('address_line_1', 'Address line 1')}
         {textField('address_line_2', 'Address line 2', 'Optional.')}
+        {textField('referral_code', 'Referral code', 'Optional.')}
         {textField('city', 'City')}
         {textField('district', 'District')}
         {textField('state', 'State')}
@@ -457,19 +445,6 @@ export default function Company() {
                     <Detail key={key} label={label} value={company[key]} />
                   ))}
                 </dl>
-
-                <div className="mt-6 border-t border-border pt-5">
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                    Product access
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {enabledProducts(company).map((label) => (
-                      <span key={label} className="rounded-md bg-muted px-2.5 py-1 text-[12.5px] font-semibold">
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
 
                 <div className="mt-7 flex items-center justify-end gap-2.5 border-t border-border pt-5">
                   <Button variant="outline" onClick={() => setPendingDelete(company)}>

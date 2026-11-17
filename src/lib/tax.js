@@ -4,11 +4,18 @@ export const EVENT_TAX_MODES = [
   { value: 'disabled', label: 'No tax for this event' },
 ]
 
-export function validateEventTax({ taxMode, taxRate, hsnCode } = {}) {
+export function validateEventTax({
+  taxMode,
+  taxRate,
+  hsnCode,
+  tax_mode,
+  tax_rate,
+  hsn_code,
+} = {}) {
   const errors = {}
-  if ((taxMode || 'inherit') !== 'event') return errors
+  if ((taxMode || tax_mode || 'inherit') !== 'event') return errors
 
-  const rateText = String(taxRate ?? '').trim()
+  const rateText = String(taxRate ?? tax_rate ?? '').trim()
   const rate = Number(rateText)
   if (!rateText || !Number.isFinite(rate)) {
     errors.tax_rate = 'Enter a tax percentage.'
@@ -16,7 +23,7 @@ export function validateEventTax({ taxMode, taxRate, hsnCode } = {}) {
     errors.tax_rate = 'Tax percentage must be greater than 0 and at most 100.'
   }
 
-  const hsn = String(hsnCode ?? '').trim()
+  const hsn = String(hsnCode ?? hsn_code ?? '').trim()
   if (!hsn) {
     errors.hsn_code = 'HSN number is required when event tax is on.'
   } else if (!/^\d{4,8}$/.test(hsn)) {

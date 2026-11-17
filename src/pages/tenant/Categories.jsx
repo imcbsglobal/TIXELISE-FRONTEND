@@ -270,7 +270,7 @@ export default function Categories() {
       </Card>
 
       <Dialog open={createOpen} onOpenChange={(v) => !v && (setCreateOpen(false), setCreateError(''))}>
-        <DialogContent>
+        <DialogContent className="creation-dialog-content">
           <DialogHeader>
             <DialogTitle>New category</DialogTitle>
           </DialogHeader>

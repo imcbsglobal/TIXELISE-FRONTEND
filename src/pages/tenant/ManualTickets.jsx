@@ -152,6 +152,8 @@ export default function ManualTickets() {
   const [staffId, setStaffId] = useState(SELF)
   const [agentId, setAgentId] = useState(NO_AGENT)
   const [rows, setRows] = useState(() => [blankRow()])
+  const ticketRowsRef = useRef(null)
+  const pendingTicketRowFocusRef = useRef('')
 
   const [pricesByEvent, setPricesByEvent] = useState({})
   const [pricesLoading, setPricesLoading] = useState({})
@@ -198,6 +200,18 @@ export default function ManualTickets() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    const uid = pendingTicketRowFocusRef.current
+    if (!uid || loading) return
+    const eventField = ticketRowsRef.current?.querySelector(
+      `[data-ticket-row="${uid}"] [data-ticket-field="event"]`,
+    )
+    if (eventField && !eventField.disabled) {
+      eventField.focus()
+      pendingTicketRowFocusRef.current = ''
+    }
+  }, [rows, loading])
 
   const loadPricesForEvent = useCallback(async (rawEventId) => {
     const eventId = String(rawEventId || '')
@@ -351,12 +365,37 @@ export default function ManualTickets() {
     loadPricesForEvent(value)
   }
 
-  function addRow() {
-    setRows((current) => {
-      const previousEventId = [...current].reverse().find((row) => row.eventId)?.eventId || ''
-      return [...current, blankRow(previousEventId)]
-    })
+  function addRow({ focusFirst = false } = {}) {
+    const previousEventId = [...rows].reverse().find((row) => row.eventId)?.eventId || ''
+    const row = blankRow(previousEventId)
+    if (focusFirst) pendingTicketRowFocusRef.current = row.uid
+    setRows((current) => [...current, row])
     setError('')
+  }
+
+  function handleTicketShortcuts(event) {
+    if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      addRow({ focusFirst: true })
+      return
+    }
+
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
+    const field = event.target.closest?.('[data-ticket-field]')
+    const row = field?.closest('[data-ticket-row]')
+    if (!field || !row) return
+
+    const fields = ['event', 'category', 'quantity']
+    const currentIndex = fields.indexOf(field.dataset.ticketField)
+    if (currentIndex < 0) return
+
+    event.preventDefault()
+    const nextIndex = currentIndex + (event.key === 'ArrowRight' ? 1 : -1)
+    if (nextIndex < 0 || nextIndex >= fields.length) return
+
+    row.querySelector(`[data-ticket-field="${fields[nextIndex]}"]`)?.focus()
   }
 
   function removeRow(uid) {
@@ -699,66 +738,78 @@ export default function ManualTickets() {
         subtitle="Issue tickets for one or more events in a single entry. Choose the holder and agent once, then add event and category rows; each event is saved as its own sale."
       />
 
-      <form onSubmit={handleSubmit} className="mx-auto max-w-[1320px] space-y-5">
+      <form onSubmit={(event) => event.preventDefault()} className="mx-auto max-w-[1320px] space-y-5">
         {loadError ? <Alert variant="error">{loadError}</Alert> : null}
         {error ? <Alert variant="error">{error}</Alert> : null}
 
-        <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
-          <div className="order-2 space-y-4 lg:order-1">
-            <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
-                Holder and agent
-              </h3>
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
+          <div className="order-1 space-y-4">
+            <div
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
+              onKeyDown={handleTicketShortcuts}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-[220px] flex-1">
+                  <h2 className="font-display text-[18px] font-extrabold tracking-[-0.01em]">
+                    Event tickets
+                  </h2>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    Select an event and category, then use Add ticket row for more event tickets.
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Keyboard: Ctrl+→ / Ctrl+← to move between fields · Ctrl+Enter to add a row
+                  </p>
+                  <p className="mt-1 text-[12px] font-semibold text-muted-foreground">
+                    {selectedEventIds.length} event{selectedEventIds.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[440px] xl:shrink-0">
+                  <Field label="Tickets belong to">
+                    <Select
+                      value={staffId}
+                      onValueChange={setStaffId}
+                      disabled={loading || selectedEventIds.length === 0}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue
+                          placeholder={
+                            selectedEventIds.length === 0
+                              ? 'Choose an event first'
+                              : 'Choose a holder'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SELF}>Me ({adminLabel})</SelectItem>
+                        {staffOptions.map((member) => (
+                          <SelectItem key={member.id} value={String(member.id)}>
+                            {member.display_name} ({member.staff_code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
 
-              <div className="mt-3 space-y-4">
-                <Field
-                  label="Tickets belong to"
-                  hint="Only staff assigned to every selected event are shown."
-                >
-                  <Select
-                    value={staffId}
-                    onValueChange={setStaffId}
-                    disabled={loading || selectedEventIds.length === 0}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue
-                        placeholder={
-                          selectedEventIds.length === 0
-                            ? 'Choose an event first'
-                            : 'Choose a holder'
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SELF}>Me ({adminLabel})</SelectItem>
-                      {staffOptions.map((member) => (
-                        <SelectItem key={member.id} value={String(member.id)}>
-                          {member.display_name} ({member.staff_code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-
-                <Field label="Agent" hint="Optional. Used for agent sales reporting.">
-                  <Select
-                    value={agentId}
-                    onValueChange={setAgentId}
-                    disabled={loading || agents.length === 0}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="No agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_AGENT}>No agent</SelectItem>
-                      {agents.map((agent) => (
-                        <SelectItem key={agent.id} value={String(agent.id)}>
-                          {agent.code} — {agent.name} ({agent.place})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
+                  <Field label="Agent">
+                    <Select
+                      value={agentId}
+                      onValueChange={setAgentId}
+                      disabled={loading || agents.length === 0}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="No agent" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_AGENT}>No agent</SelectItem>
+                        {agents.map((agent) => (
+                          <SelectItem key={agent.id} value={String(agent.id)}>
+                            {agent.code} — {agent.name} ({agent.place})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
               </div>
 
               {selectedEventIds.length > 0 && staffOptions.length === 0 && !loading ? (
@@ -782,111 +833,6 @@ export default function ManualTickets() {
                   .
                 </p>
               ) : null}
-            </div>
-
-            <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Billing</h3>
-
-              {billGroups.length === 0 ? (
-                <p className="mt-3 text-sm text-muted-foreground">No ticket lines yet.</p>
-              ) : (
-                <div className="mt-3 space-y-4">
-                  {billGroups.map((group) => (
-                    <div key={group.key} className="space-y-1.5">
-                      <div className="flex items-start justify-between gap-3 text-[12px] font-semibold">
-                        <span className="min-w-0">
-                          {group.event.code} — {group.event.name}
-                        </span>
-                        <span className="shrink-0 text-muted-foreground">
-                          {group.quantity} ticket{group.quantity === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                      <BillRow
-                        label="Subtotal"
-                        value={`${group.currency} ${money(group.subtotal)}`}
-                        muted
-                      />
-                      {group.taxTotal > 0 ? (
-                        <BillRow
-                          label={
-                            group.taxMeta
-                              ? `${group.taxMeta.label} (${group.taxMeta.rate}%)${group.taxMeta.inclusive ? ' incl.' : ''}`
-                              : 'Tax'
-                          }
-                          value={`${group.currency} ${money(group.taxTotal)}`}
-                          muted
-                        />
-                      ) : null}
-                      <BillRow
-                        label="Event total"
-                        value={`${group.currency} ${money(group.total)}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-4 space-y-1.5 border-t border-border pt-3">
-                <BillRow
-                  label="Subtotal"
-                  value={mixedCurrency ? money(subtotal) : `${currency} ${money(subtotal)}`}
-                  muted
-                />
-                {taxTotal > 0 ? (
-                  <BillRow
-                    label="Tax"
-                    value={mixedCurrency ? money(taxTotal) : `${currency} ${money(taxTotal)}`}
-                    muted
-                  />
-                ) : null}
-                <BillRow
-                  label="Grand total"
-                  value={mixedCurrency ? money(grandTotal) : `${currency} ${money(grandTotal)}`}
-                  strong
-                />
-                {mixedCurrency ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Selected events use different currencies.
-                  </p>
-                ) : null}
-              </div>
-
-              <Button
-                type="submit"
-                className="mt-4 w-full"
-                disabled={busy || total === 0 || pricesLoadingForSelected}
-              >
-                {busy
-                  ? 'Issuing…'
-                  : `Confirm & issue ${total} ticket${total === 1 ? '' : 's'}${
-                      total > 0
-                        ? mixedCurrency
-                          ? ` · ${money(grandTotal)}`
-                          : ` · ${currency} ${money(grandTotal)}`
-                        : ''
-                    }`}
-              </Button>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Each event is issued as a separate sale.
-              </p>
-            </div>
-          </div>
-
-          <div className="order-1 space-y-4 lg:order-2">
-            <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-[18px] font-extrabold tracking-[-0.01em]">
-                    Event tickets
-                  </h2>
-                  <p className="mt-1 text-[13px] text-muted-foreground">
-                    Select an event and category, then use Add ticket row for more event tickets.
-                  </p>
-                </div>
-                <p className="text-[12px] font-semibold text-muted-foreground">
-                  {selectedEventIds.length} event{selectedEventIds.length === 1 ? '' : 's'}
-                </p>
-              </div>
 
               {emptyPriceEventIds.length > 0 ? (
                 <Alert variant="error" className="mt-4">
@@ -918,7 +864,7 @@ export default function ManualTickets() {
                 <span />
               </div>
 
-              <div className="mt-3 space-y-3">
+              <div ref={ticketRowsRef} className="mt-3 space-y-3">
                 {rows.map((row) => {
                   const line = lineByUid[row.uid]
                   const eventId = String(row.eventId || '')
@@ -929,6 +875,7 @@ export default function ManualTickets() {
                   return (
                     <div
                       key={row.uid}
+                      data-ticket-row={row.uid}
                       className="grid grid-cols-1 gap-3 rounded-md border border-border p-3 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1.25fr)_78px_180px_36px] md:items-center md:gap-2 md:border-0 md:p-0"
                     >
                       <div className="space-y-1 md:contents">
@@ -938,7 +885,7 @@ export default function ManualTickets() {
                           onValueChange={(value) => changeRowEvent(row.uid, value)}
                           disabled={loading}
                         >
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-full" data-ticket-field="event">
                             <SelectValue placeholder={loading ? 'Loading events…' : 'Choose an event'} />
                           </SelectTrigger>
                           <SelectContent>
@@ -958,7 +905,7 @@ export default function ManualTickets() {
                           onValueChange={(value) => updateRow(row.uid, { category: value })}
                           disabled={!row.eventId || loadingPrices || prices.length === 0}
                         >
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-full" data-ticket-field="category">
                             <SelectValue
                               placeholder={
                                 !row.eventId
@@ -992,6 +939,7 @@ export default function ManualTickets() {
                             updateRow(row.uid, { quantity: event.target.value })
                           }
                           aria-label="Quantity"
+                          data-ticket-field="quantity"
                         />
                       </div>
 
@@ -1029,7 +977,7 @@ export default function ManualTickets() {
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <Button type="button" variant="outline" size="sm" onClick={addRow}>
+                <Button type="button" variant="outline" size="sm" onClick={() => addRow()}>
                   <Plus className="h-4 w-4" /> Add ticket row
                 </Button>
                 <p className="text-xs text-muted-foreground">
@@ -1037,6 +985,96 @@ export default function ManualTickets() {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="order-2 flex flex-col rounded-lg border border-border bg-card p-5 shadow-sm xl:sticky xl:top-4 xl:col-start-2 xl:h-[min(680px,calc(100vh-2rem))] xl:overflow-hidden">
+            <h3 className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
+              Billing
+            </h3>
+
+            {billGroups.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">No ticket lines yet.</p>
+            ) : (
+              <div className="mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+                {billGroups.map((group) => (
+                  <div key={group.key} className="space-y-1.5">
+                    <div className="flex items-start justify-between gap-3 text-[12px] font-semibold">
+                      <span className="min-w-0">
+                        {group.event.code} — {group.event.name}
+                      </span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {group.quantity} ticket{group.quantity === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <BillRow
+                      label="Subtotal"
+                      value={`${group.currency} ${money(group.subtotal)}`}
+                      muted
+                    />
+                    {group.taxTotal > 0 ? (
+                      <BillRow
+                        label={
+                          group.taxMeta
+                            ? `${group.taxMeta.label} (${group.taxMeta.rate}%)${group.taxMeta.inclusive ? ' incl.' : ''}`
+                            : 'Tax'
+                        }
+                        value={`${group.currency} ${money(group.taxTotal)}`}
+                        muted
+                      />
+                    ) : null}
+                    <BillRow
+                      label="Event total"
+                      value={`${group.currency} ${money(group.total)}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 shrink-0 space-y-1.5 border-t border-border pt-3">
+              <BillRow
+                label="Subtotal"
+                value={mixedCurrency ? money(subtotal) : `${currency} ${money(subtotal)}`}
+                muted
+              />
+              {taxTotal > 0 ? (
+                <BillRow
+                  label="Tax"
+                  value={mixedCurrency ? money(taxTotal) : `${currency} ${money(taxTotal)}`}
+                  muted
+                />
+              ) : null}
+              <BillRow
+                label="Grand total"
+                value={mixedCurrency ? money(grandTotal) : `${currency} ${money(grandTotal)}`}
+                strong
+              />
+              {mixedCurrency ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Selected events use different currencies.
+                </p>
+              ) : null}
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              className="mt-4 w-full shrink-0"
+              disabled={busy || total === 0 || pricesLoadingForSelected}
+            >
+              {busy
+                ? 'Issuing…'
+                : `Confirm & issue ${total} ticket${total === 1 ? '' : 's'}${
+                    total > 0
+                      ? mixedCurrency
+                        ? ` · ${money(grandTotal)}`
+                        : ` · ${currency} ${money(grandTotal)}`
+                      : ''
+                  }`}
+            </Button>
+            <p className="mt-2 shrink-0 text-[11px] text-muted-foreground">
+              Each event is issued as a separate sale.
+            </p>
           </div>
         </div>
       </form>

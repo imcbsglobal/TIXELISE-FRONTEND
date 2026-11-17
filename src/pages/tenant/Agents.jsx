@@ -13,7 +13,7 @@ import { EmptyRow, LoadingRow, PageHead, Pager, RefreshButton, SearchInput } fro
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const PAGE_SIZE = 20
-const EMPTY_FORM = { code: '', name: '', place: '' }
+const EMPTY_FORM = { code: '', name: '', place: '', phone: '' }
 
 export default function Agents() {
   const [page, setPage] = useState(1)
@@ -61,7 +61,9 @@ export default function Agents() {
 
   const totalPages = Math.max(1, Math.ceil(data.count / PAGE_SIZE))
   const rows = data.results.filter((agent) =>
-    `${agent.code} ${agent.name} ${agent.place}`.toLowerCase().includes(search.trim().toLowerCase()),
+    `${agent.code} ${agent.name} ${agent.place} ${agent.phone}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase()),
   )
 
   function reload() {
@@ -112,6 +114,7 @@ export default function Agents() {
         code: form.code.trim().toUpperCase(),
         name: form.name.trim(),
         place: form.place.trim(),
+        phone: form.phone.trim(),
       })
       setForm(EMPTY_FORM)
       setCreateOpen(false)
@@ -128,7 +131,12 @@ export default function Agents() {
   function openDetail(agent) {
     setDetailError('')
     setDetail(agent)
-    setDetailForm({ code: agent.code, name: agent.name, place: agent.place })
+    setDetailForm({
+      code: agent.code,
+      name: agent.name,
+      place: agent.place,
+      phone: agent.phone || '',
+    })
   }
 
   async function handleSaveDetail(event) {
@@ -140,6 +148,7 @@ export default function Agents() {
         code: detailForm.code.trim().toUpperCase(),
         name: detailForm.name.trim(),
         place: detailForm.place.trim(),
+        phone: detailForm.phone.trim(),
       })
       setDetail(null)
       setNotice('Agent updated.')
@@ -177,7 +186,7 @@ export default function Agents() {
       <Card>
         <CardContent className="p-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-            <SearchInput value={search} onChange={setSearch} placeholder="Search by code, name or place…" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Search by code, name, place or phone…" />
             <Select
               value={statusFilter}
               onValueChange={(value) => {
@@ -202,6 +211,7 @@ export default function Agents() {
                 <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Place</TableHead>
+                <TableHead>Phone</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Actions</TableHead>
@@ -209,10 +219,10 @@ export default function Agents() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <LoadingRow colSpan={6} />
+                <LoadingRow colSpan={7} />
               ) : rows.length === 0 ? (
                 <EmptyRow
-                  colSpan={6}
+                  colSpan={7}
                   message={
                     data.results.length === 0
                       ? 'No agents yet.'
@@ -225,6 +235,7 @@ export default function Agents() {
                     <TableCell className="font-mono text-[13.5px]">{agent.code}</TableCell>
                     <TableCell className="font-medium">{agent.name}</TableCell>
                     <TableCell className="text-muted-foreground">{agent.place}</TableCell>
+                    <TableCell className="text-muted-foreground">{agent.phone || '—'}</TableCell>
                     <TableCell>
                       <StatusBadge status={agent.status} />
                     </TableCell>
@@ -284,7 +295,7 @@ export default function Agents() {
       </Card>
 
       <Dialog open={createOpen} onOpenChange={(value) => !value && (setCreateOpen(false), setCreateError(''))}>
-        <DialogContent>
+        <DialogContent className="creation-dialog-content">
           <DialogHeader>
             <DialogTitle>New agent</DialogTitle>
           </DialogHeader>
@@ -308,14 +319,25 @@ export default function Agents() {
                 />
               </Field>
             </div>
-            <Field label="Place">
-              <Input
-                value={form.place}
-                onChange={(e) => setForm({ ...form, place: e.target.value })}
-                placeholder="City or branch"
-                required
-              />
-            </Field>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Place">
+                <Input
+                  value={form.place}
+                  onChange={(e) => setForm({ ...form, place: e.target.value })}
+                  placeholder="City or branch"
+                  required
+                />
+              </Field>
+              <Field label="Phone number">
+                <Input
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="+91 98765 43210"
+                  maxLength={32}
+                  required
+                />
+              </Field>
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
                 Cancel
@@ -357,13 +379,24 @@ export default function Agents() {
                   />
                 </Field>
               </div>
-              <Field label="Place">
-                <Input
-                  value={detailForm.place}
-                  onChange={(e) => setDetailForm({ ...detailForm, place: e.target.value })}
-                  required
-                />
-              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Place">
+                  <Input
+                    value={detailForm.place}
+                    onChange={(e) => setDetailForm({ ...detailForm, place: e.target.value })}
+                    required
+                  />
+                </Field>
+                <Field label="Phone number">
+                  <Input
+                    value={detailForm.phone}
+                    onChange={(e) => setDetailForm({ ...detailForm, phone: e.target.value })}
+                    placeholder="+91 98765 43210"
+                    maxLength={32}
+                    required
+                  />
+                </Field>
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDetail(null)}>
                   Close

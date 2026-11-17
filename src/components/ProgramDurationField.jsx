@@ -54,12 +54,16 @@ function TimeRow({ label, value, onChange, invalid }) {
   const triggerClass = invalid ? 'border-destructive focus:border-destructive focus:ring-destructive/20' : undefined
 
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_4.25rem] gap-2">
         <Select value={parts.hour || undefined} onValueChange={(next) => update({ hour: next })}>
-          <SelectTrigger aria-label={`${label} hour`} aria-invalid={invalid || undefined} className={triggerClass}>
-            <SelectValue placeholder="HH" />
+          <SelectTrigger
+            aria-label={`${label} hour`}
+            aria-invalid={invalid || undefined}
+            className={cn('min-w-0 gap-1 px-2.5 text-sm [&>span]:min-w-0 [&>span]:flex-1', triggerClass)}
+          >
+            <SelectValue placeholder="HH" className="min-w-0 flex-1 truncate" />
           </SelectTrigger>
           <SelectContent>
             {HOURS.map((hour) => (
@@ -70,8 +74,12 @@ function TimeRow({ label, value, onChange, invalid }) {
           </SelectContent>
         </Select>
         <Select value={parts.minute || undefined} onValueChange={(next) => update({ minute: next })}>
-          <SelectTrigger aria-label={`${label} minute`} aria-invalid={invalid || undefined} className={triggerClass}>
-            <SelectValue placeholder="MM" />
+          <SelectTrigger
+            aria-label={`${label} minute`}
+            aria-invalid={invalid || undefined}
+            className={cn('min-w-0 gap-1 px-2.5 text-sm [&>span]:min-w-0 [&>span]:flex-1', triggerClass)}
+          >
+            <SelectValue placeholder="MM" className="min-w-0 flex-1 truncate" />
           </SelectTrigger>
           <SelectContent>
             {MINUTES.map((minute) => (
@@ -82,8 +90,12 @@ function TimeRow({ label, value, onChange, invalid }) {
           </SelectContent>
         </Select>
         <Select value={parts.meridiem || undefined} onValueChange={(next) => update({ meridiem: next })}>
-          <SelectTrigger aria-label={`${label} period`} aria-invalid={invalid || undefined} className={triggerClass}>
-            <SelectValue placeholder="--" />
+          <SelectTrigger
+            aria-label={`${label} period`}
+            aria-invalid={invalid || undefined}
+            className={cn('min-w-0 gap-1 px-2 text-sm [&>span]:min-w-0 [&>span]:flex-1', triggerClass)}
+          >
+            <SelectValue placeholder="--" className="min-w-0 flex-1 truncate" />
           </SelectTrigger>
           <SelectContent>
             {MERIDIEMS.map((meridiem) => (
@@ -98,18 +110,28 @@ function TimeRow({ label, value, onChange, invalid }) {
   )
 }
 
-export function ProgramDurationField({ start, end, onChange, error, hint, disabled }) {
+export function ProgramDurationField({
+  start,
+  end,
+  onChange,
+  error,
+  hint,
+  disabled,
+  showDescription = true,
+}) {
   const duration = programDurationText(start, end)
   const hasValue = Boolean(start || end)
 
   return (
-    <div className={cn('space-y-2', disabled && 'pointer-events-none opacity-60')}>
+    <div className={cn('min-w-0 space-y-2', disabled && 'pointer-events-none opacity-60')}>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <Label>Program duration</Label>
-          <p className="text-xs text-muted-foreground">
-            Optional daily start and end time for the programme. It does not change when tickets can be sold.
-          </p>
+          {showDescription ? (
+            <p className="text-xs text-muted-foreground">
+              Optional daily start and end time for the programme. It does not change when tickets can be sold.
+            </p>
+          ) : null}
         </div>
         {hasValue ? (
           <Button type="button" variant="ghost" size="sm" onClick={() => onChange('', '')}>
@@ -117,7 +139,7 @@ export function ProgramDurationField({ start, end, onChange, error, hint, disabl
           </Button>
         ) : null}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         <TimeRow
           label="Starts"
           value={start}

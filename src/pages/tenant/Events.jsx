@@ -61,6 +61,42 @@ const EVENT_TYPES = [
   { value: 'periodical', label: 'Periodical event' },
 ]
 
+function eventTaxOptions(india, other) {
+  const records = [
+    ...(Array.isArray(india?.results) ? india.results : []).map((row) => ({
+      ...row,
+      scheme: 'india',
+      schemeLabel: 'India GST',
+      rate: row.gst,
+    })),
+    ...(Array.isArray(other?.results) ? other.results : []).map((row) => ({
+      ...row,
+      scheme: 'other',
+      schemeLabel: 'Other tax',
+      rate: row.tax,
+    })),
+  ]
+
+  return records
+    .filter(
+      (row) =>
+        String(row.status || '').toUpperCase() === 'ACTIVE' &&
+        Number.isFinite(Number(row.rate)) &&
+        Number(row.rate) > 0 &&
+        Number(row.rate) <= 100,
+    )
+    .map((row) => ({
+      ...row,
+      value: `${row.scheme}:${row.id}`,
+      rate: String(Number(row.rate)),
+    }))
+}
+
+function defaultEventTaxRecord(records) {
+  const indiaRecord = records.find((row) => row.scheme === 'india')
+  return indiaRecord || records[0] || null
+}
+
 function toLocalInput(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -98,6 +134,9 @@ export default function Events() {
   const [createProgramError, setCreateProgramError] = useState('')
   const [createTaxErrors, setCreateTaxErrors] = useState({})
   const [companyTax, setCompanyTax] = useState(null)
+  const [eventTaxRecords, setEventTaxRecords] = useState([])
+  const [eventTaxRecordsLoading, setEventTaxRecordsLoading] = useState(true)
+  const [eventTaxRecordsError, setEventTaxRecordsError] = useState('')
 
   const [detail, setDetail] = useState(null)
   const [detailForm, setDetailForm] = useState(EMPTY_FORM)
@@ -112,14 +151,40 @@ export default function Events() {
 
   useEffect(() => {
     let cancelled = false
-    api
-      .get('/admin/tax-settings/')
-      .then((res) => !cancelled && setCompanyTax(res))
-      .catch(() => !cancelled && setCompanyTax(null))
+    Promise.all([
+      api.get('/admin/tax-settings/').catch(() => null),
+      api.get('/admin/tax-master/india/'),
+      api.get('/admin/tax-master/other/'),
+    ])
+      .then(([company, india, other]) => {
+        if (cancelled) return
+        setCompanyTax(company)
+        setEventTaxRecords(eventTaxOptions(india, other))
+        setEventTaxRecordsError('')
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setEventTaxRecords([])
+        setEventTaxRecordsError(`Could not load tax master records: ${err.message}`)
+      })
+      .finally(() => !cancelled && setEventTaxRecordsLoading(false))
     return () => {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (
+      eventTaxRecordsLoading ||
+      !createOpen ||
+      form.tax_mode !== 'event' ||
+      form.tax_rate
+    ) {
+      return
+    }
+    const taxRecord = defaultEventTaxRecord(eventTaxRecords)
+    if (taxRecord) setForm((current) => ({ ...current, tax_rate: taxRecord.rate }))
+  }, [eventTaxRecordsLoading, eventTaxRecords, createOpen, form.tax_mode, form.tax_rate])
 
   // The sidebar's main Events link opens in grid view; the Entries > Event link
   // keeps the list default. Re-sync whenever that query changes.
@@ -182,6 +247,17 @@ export default function Events() {
       code: value.toUpperCase().replace(/[^A-Z0-9]/g, ''),
       codeTouched: true,
     }))
+  }
+
+  function openCreateEvent() {
+    const taxRecord = defaultEventTaxRecord(eventTaxRecords)
+    setForm({
+      ...EMPTY_FORM,
+      ...(taxRecord ? { tax_rate: taxRecord.rate } : {}),
+    })
+    setCreateProgramError('')
+    setCreateTaxErrors({})
+    setCreateOpen(true)
   }
 
   async function transition(ev, target) {
@@ -375,11 +451,7 @@ export default function Events() {
         <RefreshButton loading={loading} onClick={reload} />
         {viewParam !== 'grid' ? (
           <Button
-            onClick={() => {
-              setCreateProgramError('')
-              setCreateTaxErrors({})
-              setCreateOpen(true)
-            }}
+            onClick={openCreateEvent}
           >
             <Plus className="h-4 w-4" /> New event
           </Button>
@@ -546,133 +618,143 @@ export default function Events() {
           }
         }}
       >
-        <DialogContent className="w-[min(100%-2rem,760px)]">
+        <DialogContent className="creation-dialog-content event-create-dialog">
           <DialogHeader>
             <DialogTitle>New event</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4">
-            {createError && <Alert variant="error">{createError}</Alert>}
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Event name">
-                <Input
-                  value={form.name}
-                  onChange={(e) => handleFormName(e.target.value)}
-                  placeholder="Music Fest 2026"
-                  required
-                />
-              </Field>
-              <Field label="Event code" hint="Generated from the name — edit if you prefer another.">
-                <Input
-                  value={form.code}
-                  onChange={(e) => handleFormCode(e.target.value)}
-                  placeholder="MUSICFEST2026"
-                  required
-                />
-              </Field>
-            </div>
-
-            <Field label="Description" hint="Optional">
-              <Textarea
-                rows="2"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Short description of the event…"
-              />
-            </Field>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Venue" hint="Optional — existing event sections appear as suggestions.">
-                <VenueInput
-                  value={form.venue}
-                  onChange={(value) => setForm({ ...form, venue: value })}
-                  venues={venueOptions}
-                  placeholder="Central Auditorium"
-                />
-              </Field>
-              <Field label="Address" hint="Optional">
-                <Input
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  placeholder="123 Main Street"
-                />
-              </Field>
-            </div>
-
-            <p className="border-t border-border pt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
-              Schedule
-            </p>
-
-            <Field
-              label="Event type"
-              hint="Regular events start now, have no end date, and need no schedule."
-            >
-              <Select value={form.event_type} onValueChange={(v) => setForm({ ...form, event_type: v })}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EVENT_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-
-            {form.event_type === 'regular' ? (
-              <p className="rounded-md bg-muted px-4 py-3 text-[13px] text-muted-foreground">
-                Starts now with sales open immediately. A regular event has no end date — it keeps
-                selling until you mark it completed or cancelled.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Starts at">
-                  <Input type="datetime-local" value={form.start_at} onChange={(e) => setForm({ ...form, start_at: e.target.value })} required />
-                </Field>
-                <Field label="Ends at">
-                  <Input type="datetime-local" value={form.end_at} onChange={(e) => setForm({ ...form, end_at: e.target.value })} required />
-                </Field>
-                <Field label="Sales open" hint="Optional">
-                  <Input type="datetime-local" value={form.sales_start_at} onChange={(e) => setForm({ ...form, sales_start_at: e.target.value })} />
-                </Field>
-                <Field label="Sales close" hint="Optional">
-                  <Input type="datetime-local" value={form.sales_end_at} onChange={(e) => setForm({ ...form, sales_end_at: e.target.value })} />
-                </Field>
+          <form onSubmit={handleCreate} className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
+            {createError && (
+              <div className="xl:col-span-2">
+                <Alert variant="error">{createError}</Alert>
               </div>
             )}
 
-            <ProgramDurationField
-              start={form.program_start_time}
-              end={form.program_end_time}
-              error={createProgramError}
-              onChange={(start, end) => {
-                setForm({ ...form, program_start_time: start, program_end_time: end })
-                setCreateProgramError('')
-              }}
-            />
+            <div className="min-w-0 space-y-4 xl:pr-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Event name">
+                  <Input
+                    value={form.name}
+                    onChange={(e) => handleFormName(e.target.value)}
+                    placeholder="Music Fest 2026"
+                    required
+                  />
+                </Field>
+                <Field label="Event code" hint="Generated from the name — edit if you prefer another.">
+                  <Input
+                    value={form.code}
+                    onChange={(e) => handleFormCode(e.target.value)}
+                    placeholder="MUSICFEST2026"
+                    required
+                  />
+                </Field>
+              </div>
 
-            <EventTaxFields
-              taxMode={form.tax_mode}
-              taxRate={form.tax_rate}
-              hsnCode={form.hsn_code}
-              pricesIncludeTax={form.prices_include_tax}
-              companySetting={companyTax}
-              errors={createTaxErrors}
-              onChange={(patch) => {
-                setForm({ ...form, ...patch })
-                setCreateTaxErrors((current) => {
-                  if ('tax_mode' in patch) return {}
-                  const next = { ...current }
-                  if ('tax_rate' in patch) delete next.tax_rate
-                  if ('hsn_code' in patch) delete next.hsn_code
-                  return next
-                })
-              }}
-            />
+              <Field label="Description" hint="Optional">
+                <Textarea
+                  rows="2"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Short description of the event…"
+                />
+              </Field>
 
-            <DialogFooter>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Venue" hint="Optional — existing event sections appear as suggestions.">
+                  <VenueInput
+                    value={form.venue}
+                    onChange={(value) => setForm({ ...form, venue: value })}
+                    venues={venueOptions}
+                    placeholder="Central Auditorium"
+                  />
+                </Field>
+                <Field label="Address" hint="Optional">
+                  <Input
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    placeholder="123 Main Street"
+                  />
+                </Field>
+              </div>
+
+              <p className="border-t border-border pt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
+                Schedule
+              </p>
+
+              <Field label="Event type">
+                <Select value={form.event_type} onValueChange={(v) => setForm({ ...form, event_type: v })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {form.event_type === 'periodical' && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Starts at">
+                    <Input type="datetime-local" value={form.start_at} onChange={(e) => setForm({ ...form, start_at: e.target.value })} required />
+                  </Field>
+                  <Field label="Ends at">
+                    <Input type="datetime-local" value={form.end_at} onChange={(e) => setForm({ ...form, end_at: e.target.value })} required />
+                  </Field>
+                  <Field label="Sales open">
+                    <Input type="datetime-local" value={form.sales_start_at} onChange={(e) => setForm({ ...form, sales_start_at: e.target.value })} />
+                  </Field>
+                  <Field label="Sales close">
+                    <Input type="datetime-local" value={form.sales_end_at} onChange={(e) => setForm({ ...form, sales_end_at: e.target.value })} />
+                  </Field>
+                </div>
+              )}
+            </div>
+
+            <div className="min-w-0 space-y-4 xl:border-l xl:border-border xl:pl-5">
+              <ProgramDurationField
+                start={form.program_start_time}
+                end={form.program_end_time}
+                error={createProgramError}
+                showDescription={false}
+                onChange={(start, end) => {
+                  setForm((current) => ({
+                    ...current,
+                    program_start_time: start,
+                    program_end_time: end,
+                  }))
+                  setCreateProgramError('')
+                }}
+              />
+
+              <EventTaxFields
+                taxMode={form.tax_mode}
+                taxRate={form.tax_rate}
+                hsnCode={form.hsn_code}
+                pricesIncludeTax={form.prices_include_tax}
+                companySetting={companyTax}
+                allowCompanyTax={false}
+                showDescription={false}
+                taxRecords={eventTaxRecords}
+                taxRecordsLoading={eventTaxRecordsLoading}
+                taxRecordsError={eventTaxRecordsError}
+                errors={createTaxErrors}
+                onChange={(patch) => {
+                  setForm({ ...form, ...patch })
+                  setCreateTaxErrors((current) => {
+                    if ('tax_mode' in patch) return {}
+                    const next = { ...current }
+                    if ('tax_rate' in patch) delete next.tax_rate
+                    if ('hsn_code' in patch) delete next.hsn_code
+                    return next
+                  })
+                }}
+              />
+            </div>
+
+            <DialogFooter className="xl:col-span-2">
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
                 Cancel
               </Button>
@@ -694,120 +776,152 @@ export default function Events() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="creation-dialog-content event-create-dialog">
           <DialogHeader>
-            <DialogTitle>Event {detail?.code}</DialogTitle>
+            <DialogTitle className="text-lg">Event {detail?.code}</DialogTitle>
           </DialogHeader>
           {detail && (
-            <form onSubmit={handleSaveDetail} className="space-y-4">
-              {detailError && <Alert variant="error">{detailError}</Alert>}
+            <form onSubmit={handleSaveDetail} className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
+              {detailError && (
+                <div className="xl:col-span-2">
+                  <Alert variant="error">{detailError}</Alert>
+                </div>
+              )}
 
-              <div className="flex flex-wrap items-center gap-3.5 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-3.5 text-sm text-muted-foreground xl:col-span-2">
                 <StatusBadge status={detail.status} />
                 <span>ID {detail.id}</span>
                 <span>Created {new Date(detail.created_at).toLocaleString()}</span>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Event code">
-                  <Input
-                    value={detailForm.code}
-                    onChange={(e) => setDetailForm({ ...detailForm, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
-                    required
-                  />
-                </Field>
-                <Field label="Event name">
-                  <Input value={detailForm.name} onChange={(e) => setDetailForm({ ...detailForm, name: e.target.value })} required />
-                </Field>
-              </div>
-
-              <Field label="Description">
-                <Textarea rows="2" value={detailForm.description} onChange={(e) => setDetailForm({ ...detailForm, description: e.target.value })} />
-              </Field>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Venue" hint="Choose an existing event section or type a new one.">
-                  <VenueInput
-                    value={detailForm.venue}
-                    onChange={(value) => setDetailForm({ ...detailForm, venue: value })}
-                    venues={venueOptions}
-                    placeholder="Central Auditorium"
-                  />
-                </Field>
-                <Field label="Address">
-                  <Input value={detailForm.address} onChange={(e) => setDetailForm({ ...detailForm, address: e.target.value })} />
-                </Field>
-              </div>
-
-              <p className="border-t border-border pt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
-                Schedule
-              </p>
-
-              <Field label="Event type" hint="Switching to periodical requires a start and end time.">
-                <Select
-                  value={detailForm.event_type}
-                  onValueChange={(v) => setDetailForm({ ...detailForm, event_type: v })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {EVENT_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              {detailForm.event_type !== 'regular' ? (
+              <div className="min-w-0 space-y-4 xl:pr-2">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Starts at">
-                    <Input type="datetime-local" value={detailForm.start_at} onChange={(e) => setDetailForm({ ...detailForm, start_at: e.target.value })} required />
+                  <Field label="Event name">
+                    <Input
+                      value={detailForm.name}
+                      onChange={(e) => setDetailForm({ ...detailForm, name: e.target.value })}
+                      placeholder="Music Fest 2026"
+                      required
+                    />
                   </Field>
-                  <Field label="Ends at">
-                    <Input type="datetime-local" value={detailForm.end_at} onChange={(e) => setDetailForm({ ...detailForm, end_at: e.target.value })} required />
-                  </Field>
-                  <Field label="Sales open">
-                    <Input type="datetime-local" value={detailForm.sales_start_at} onChange={(e) => setDetailForm({ ...detailForm, sales_start_at: e.target.value })} />
-                  </Field>
-                  <Field label="Sales close">
-                    <Input type="datetime-local" value={detailForm.sales_end_at} onChange={(e) => setDetailForm({ ...detailForm, sales_end_at: e.target.value })} />
+                  <Field label="Event code">
+                    <Input
+                      value={detailForm.code}
+                      onChange={(e) => setDetailForm({ ...detailForm, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
+                      placeholder="MUSICFEST2026"
+                      required
+                    />
                   </Field>
                 </div>
-              ) : null}
 
-              <ProgramDurationField
-                start={detailForm.program_start_time}
-                end={detailForm.program_end_time}
-                error={detailProgramError}
-                onChange={(start, end) => {
-                  setDetailForm({ ...detailForm, program_start_time: start, program_end_time: end })
-                  setDetailProgramError('')
-                }}
-              />
+                <Field label="Description">
+                  <Textarea
+                    rows="2"
+                    value={detailForm.description}
+                    onChange={(e) => setDetailForm({ ...detailForm, description: e.target.value })}
+                    placeholder="Short description of the event…"
+                  />
+                </Field>
 
-              <EventTaxFields
-                taxMode={detailForm.tax_mode}
-                taxRate={detailForm.tax_rate}
-                hsnCode={detailForm.hsn_code}
-                pricesIncludeTax={detailForm.prices_include_tax}
-                companySetting={companyTax}
-                errors={detailTaxErrors}
-                onChange={(patch) => {
-                  setDetailForm({ ...detailForm, ...patch })
-                  setDetailTaxErrors((current) => {
-                    if ('tax_mode' in patch) return {}
-                    const next = { ...current }
-                    if ('tax_rate' in patch) delete next.tax_rate
-                    if ('hsn_code' in patch) delete next.hsn_code
-                    return next
-                  })
-                }}
-              />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Venue">
+                    <VenueInput
+                      value={detailForm.venue}
+                      onChange={(value) => setDetailForm({ ...detailForm, venue: value })}
+                      venues={venueOptions}
+                      placeholder="Central Auditorium"
+                    />
+                  </Field>
+                  <Field label="Address">
+                    <Input
+                      value={detailForm.address}
+                      onChange={(e) => setDetailForm({ ...detailForm, address: e.target.value })}
+                      placeholder="123 Main Street"
+                    />
+                  </Field>
+                </div>
 
-              <DialogFooter>
+                <p className="border-t border-border pt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
+                  Schedule
+                </p>
+
+                <Field label="Event type">
+                  <Select
+                    value={detailForm.event_type}
+                    onValueChange={(v) => setDetailForm({ ...detailForm, event_type: v })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EVENT_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {detailForm.event_type !== 'regular' && (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field label="Starts at">
+                      <Input type="datetime-local" value={detailForm.start_at} onChange={(e) => setDetailForm({ ...detailForm, start_at: e.target.value })} required />
+                    </Field>
+                    <Field label="Ends at">
+                      <Input type="datetime-local" value={detailForm.end_at} onChange={(e) => setDetailForm({ ...detailForm, end_at: e.target.value })} required />
+                    </Field>
+                    <Field label="Sales open">
+                      <Input type="datetime-local" value={detailForm.sales_start_at} onChange={(e) => setDetailForm({ ...detailForm, sales_start_at: e.target.value })} />
+                    </Field>
+                    <Field label="Sales close">
+                      <Input type="datetime-local" value={detailForm.sales_end_at} onChange={(e) => setDetailForm({ ...detailForm, sales_end_at: e.target.value })} />
+                    </Field>
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 space-y-4 xl:border-l xl:border-border xl:pl-5">
+                <ProgramDurationField
+                  start={detailForm.program_start_time}
+                  end={detailForm.program_end_time}
+                  error={detailProgramError}
+                  showDescription={false}
+                  onChange={(start, end) => {
+                    setDetailForm((current) => ({
+                      ...current,
+                      program_start_time: start,
+                      program_end_time: end,
+                    }))
+                    setDetailProgramError('')
+                  }}
+                />
+
+                <EventTaxFields
+                  taxMode={detailForm.tax_mode}
+                  taxRate={detailForm.tax_rate}
+                  hsnCode={detailForm.hsn_code}
+                  pricesIncludeTax={detailForm.prices_include_tax}
+                  companySetting={companyTax}
+                  showDescription={false}
+                  taxRecords={eventTaxRecords}
+                  taxRecordsLoading={eventTaxRecordsLoading}
+                  taxRecordsError={eventTaxRecordsError}
+                  errors={detailTaxErrors}
+                  onChange={(patch) => {
+                    setDetailForm({ ...detailForm, ...patch })
+                    setDetailTaxErrors((current) => {
+                      if ('tax_mode' in patch) return {}
+                      const next = { ...current }
+                      if ('tax_rate' in patch) delete next.tax_rate
+                      if ('hsn_code' in patch) delete next.hsn_code
+                      return next
+                    })
+                  }}
+                />
+              </div>
+
+              <DialogFooter className="xl:col-span-2">
                 <Button type="button" variant="outline" onClick={() => setDetail(null)}>
                   Close
                 </Button>

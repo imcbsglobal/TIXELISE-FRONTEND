@@ -414,7 +414,7 @@ export default function Prices() {
       )}
 
       <Dialog open={createOpen} onOpenChange={(v) => !v && (setCreateOpen(false), setCreateError(''))}>
-        <DialogContent>
+        <DialogContent className="creation-dialog-content">
           <DialogHeader>
             <DialogTitle>New price</DialogTitle>
           </DialogHeader>

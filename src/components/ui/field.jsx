@@ -7,7 +7,7 @@ export function Field({ label, hint, children, className }) {
     <div className={cn('space-y-2', className)}>
       {label ? <Label>{label}</Label> : null}
       {children}
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p data-field-hint className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   )
 }
