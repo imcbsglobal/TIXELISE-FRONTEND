@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { programDurationText } from '@/lib/time'
 
@@ -118,15 +119,37 @@ export function ProgramDurationField({
   hint,
   disabled,
   showDescription = true,
+  collapsible = false,
 }) {
   const duration = programDurationText(start, end)
   const hasValue = Boolean(start || end)
+  const [expanded, setExpanded] = React.useState(!collapsible)
+  const fieldsId = React.useId()
+
+  React.useEffect(() => {
+    if (error) setExpanded(true)
+  }, [error])
 
   return (
     <div className={cn('min-w-0 space-y-2', disabled && 'pointer-events-none opacity-60')}>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <Label>Program duration</Label>
+          {collapsible ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto w-full justify-between px-0 py-1 text-foreground hover:bg-transparent hover:text-foreground"
+              aria-expanded={expanded}
+              aria-controls={fieldsId}
+              onClick={() => setExpanded((current) => !current)}
+            >
+              <span className="text-sm font-semibold">Program duration</span>
+              <ChevronDown className={cn('transition-transform', expanded && 'rotate-180')} />
+            </Button>
+          ) : (
+            <Label>Program duration</Label>
+          )}
           {showDescription ? (
             <p className="text-xs text-muted-foreground">
               Optional daily start and end time for the programme. It does not change when tickets can be sold.
@@ -139,29 +162,36 @@ export function ProgramDurationField({
           </Button>
         ) : null}
       </div>
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-        <TimeRow
-          label="Starts"
-          value={start}
-          invalid={Boolean(error) && !start}
-          onChange={(next) => onChange(next, end)}
-        />
-        <TimeRow
-          label="Ends"
-          value={end}
-          invalid={Boolean(error)}
-          onChange={(next) => onChange(start, next)}
-        />
-      </div>
-      <div className="min-h-4 text-xs">
-        {error ? (
-          <p className="text-destructive">{error}</p>
-        ) : duration ? (
-          <p className="text-muted-foreground">Lasts {duration}</p>
-        ) : hint ? (
-          <p className="text-muted-foreground">{hint}</p>
-        ) : null}
-      </div>
+      {(!collapsible || expanded) && (
+        <div id={fieldsId}>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <TimeRow
+              label="Starts"
+              value={start}
+              invalid={Boolean(error) && !start}
+              onChange={(next) => onChange(next, end)}
+            />
+            <TimeRow
+              label="Ends"
+              value={end}
+              invalid={Boolean(error)}
+              onChange={(next) => onChange(start, next)}
+            />
+          </div>
+          <div className="min-h-4 text-xs">
+            {error ? (
+              <p className="text-destructive">{error}</p>
+            ) : duration ? (
+              <p className="text-muted-foreground">Lasts {duration}</p>
+            ) : hint ? (
+              <p className="text-muted-foreground">{hint}</p>
+            ) : null}
+          </div>
+        </div>
+      )}
+      {collapsible && !expanded && duration ? (
+        <p className="text-xs text-muted-foreground">Lasts {duration}</p>
+      ) : null}
     </div>
   )
 }

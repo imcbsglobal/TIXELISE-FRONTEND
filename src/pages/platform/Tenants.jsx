@@ -441,7 +441,7 @@ export default function Tenants() {
                 <Field label="Tenant code">
                   <input
                     value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                    onChange={(e) => setForm({ ...form, code: e.target.value })}
                     placeholder="DREAMS001"
                     required
                   />

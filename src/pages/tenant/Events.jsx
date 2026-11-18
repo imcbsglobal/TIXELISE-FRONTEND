@@ -719,6 +719,7 @@ export default function Events() {
                 end={form.program_end_time}
                 error={createProgramError}
                 showDescription={false}
+                collapsible
                 onChange={(start, end) => {
                   setForm((current) => ({
                     ...current,
